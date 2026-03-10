@@ -94,14 +94,34 @@ export default function AdminDashboardPage() {
   }
 
   // ── Fetch pending team join requests ──
+  // Avoids nested profile join (FK points to auth.users not public.profiles)
   const fetchJoinRequests = async () => {
     const { data, error } = await supabase
       .from('join_requests')
-      .select('id, player_id, team_id, profiles(full_name), teams(name)')
+      .select('id, player_id, team_id, status, requested_at, teams(name)')
       .eq('status', 'pending')
-      .order('id', { ascending: true })
-    if (error) console.error('[AdminDashboard] fetchJoinRequests error:', error.message)
-    if (data) setJoinRequests(data)
+      .order('requested_at', { ascending: true })
+
+    if (error) { console.error('[AdminDashboard] fetchJoinRequests:', error.message); return }
+    if (!data || data.length === 0) { setJoinRequests([]); return }
+
+    // Fetch player names separately from public.profiles
+    const playerIds = [...new Set(data.map(r => r.player_id))]
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', playerIds)
+
+    const profileMap = {}
+    profileData?.forEach(p => { profileMap[p.id] = p.full_name })
+
+    // Merge player names into requests
+    const merged = data.map(r => ({
+      ...r,
+      profiles: { full_name: profileMap[r.player_id] || 'Unknown' },
+    }))
+
+    setJoinRequests(merged)
   }
 
   // ── Approve a team join request ──
