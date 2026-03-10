@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, isThisWeek, parseISO } from 'date-fns'
+import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -28,6 +29,9 @@ export default function DashboardPage() {
   const [announcements, setAnnouncements] = useState([])
   const [loading,       setLoading]       = useState(true)
   const [submitting,    setSubmitting]    = useState(null)
+  const [allTeams,      setAllTeams]      = useState([])
+  const [joinRequests,  setJoinRequests]  = useState([])
+  const [joinLoading,   setJoinLoading]   = useState(null)
 
   useEffect(() => { document.title = PAGE_TITLES.DASHBOARD }, [])
   useEffect(() => { if (profile) loadData() }, [profile])
@@ -35,7 +39,7 @@ export default function DashboardPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchAnnouncements()])
+      await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchAnnouncements(), fetchAllTeams(), fetchJoinRequests()])
     } finally {
       setLoading(false)
     }
@@ -76,6 +80,48 @@ export default function DashboardPage() {
       const map = {}
       data.forEach(a => { map[a.fixture_id] = a.status })
       setAvailability(map)
+    }
+  }
+
+   // ── Fetch all club teams ──
+  const fetchAllTeams = async () => {
+    const { data } = await supabase
+      .from('teams')
+      .select('id, name, day_type')
+      .order('name')
+    if (data) setAllTeams(data)
+  }
+
+  // ── Fetch my pending join requests ──
+  const fetchJoinRequests = async () => {
+    const { data } = await supabase
+      .from('join_requests')
+      .select('id, team_id, status, teams(name)')
+      .eq('player_id', profile.id)
+      .eq('status', 'pending')
+    if (data) setJoinRequests(data)
+  }
+
+  // ── Submit a join request ──
+  const handleJoinRequest = async (team) => {
+    setJoinLoading(team.id)
+    try {
+      const { error } = await supabase.from('join_requests').insert({
+        player_id: profile.id,
+        team_id:   team.id,
+      })
+      if (error) {
+        if (error.code === '23505') {
+          toast('Already have a pending request for this team', { icon: '⏳' })
+        } else throw error
+        return
+      }
+      toast.success(`Join request sent to ${team.name}`)
+      await fetchJoinRequests()
+    } catch {
+      toast.error('Failed to send join request')
+    } finally {
+      setJoinLoading(null)
     }
   }
 
@@ -451,6 +497,137 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+
+        {/* ── Join a Team section — only show teams not yet joined ── */}
+        {(() => {
+          // Teams the member is already in (from fixtures team_ids)
+          const myTeamIds = new Set(fixtures.map(f => f.team_id))
+          const pendingIds = new Set(joinRequests.map(r => r.team_id))
+          const teamsToShow = allTeams.filter(t => !myTeamIds.has(t.id))
+
+          if (teamsToShow.length === 0) return null
+
+          return (
+            <div style={{ marginTop: '48px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <div className="section-label">Club Teams</div>
+                <div className="section-title" style={{ fontSize: '26px', marginBottom: '6px' }}>
+                  Join a Team
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Request to join a squad — your captain or admin will approve it.
+                </div>
+              </div>
+
+              {/* Pending requests banner */}
+              {joinRequests.length > 0 && (
+                <div style={{
+                  padding: '12px 18px', borderRadius: 'var(--radius-md)',
+                  background: 'rgba(245,197,24,0.06)',
+                  border: '1px solid rgba(245,197,24,0.2)',
+                  marginBottom: '16px', fontSize: '13px',
+                  color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
+                }}>
+                  ⏳ You have {joinRequests.length} pending join request{joinRequests.length > 1 ? 's' : ''}:{' '}
+                  <span style={{ fontWeight: 700 }}>
+                    {joinRequests.map(r => r.teams?.name).join(', ')}
+                  </span>
+                </div>
+              )}
+
+              {/* Team cards grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: '14px',
+              }}>
+                {teamsToShow.map(team => {
+                  const isPending  = pendingIds.has(team.id)
+                  const isLoading  = joinLoading === team.id
+                  const isWeekend  = team.day_type === 'saturday'
+
+                  return (
+                    <div key={team.id} className="card" style={{
+                      padding: '22px 20px', textAlign: 'center',
+                      border: isPending ? '1px solid rgba(245,197,24,0.25)' : '1px solid var(--navy-border)',
+                      background: isPending ? 'rgba(245,197,24,0.03)' : undefined,
+                      transition: 'var(--transition)',
+                    }}>
+                      {/* Team icon */}
+                      <div style={{
+                        width: '44px', height: '44px', borderRadius: '50%',
+                        background: isPending ? 'rgba(245,197,24,0.1)' : 'rgba(255,255,255,0.04)',
+                        border: isPending ? '1px solid rgba(245,197,24,0.3)' : '1px solid var(--navy-border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '18px', margin: '0 auto 14px',
+                      }}>
+                        {isWeekend ? '🏏' : '☀️'}
+                      </div>
+
+                      {/* Team name */}
+                      <div style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: '17px', letterSpacing: '1px',
+                        color: 'var(--text-primary)', marginBottom: '4px',
+                      }}>
+                        {team.name.toUpperCase()}
+                      </div>
+
+                      {/* Day type */}
+                      <div style={{
+                        fontSize: '11px', color: 'var(--text-muted)',
+                        marginBottom: '16px', textTransform: 'capitalize',
+                        letterSpacing: '0.5px',
+                      }}>
+                        {team.day_type} fixture
+                      </div>
+
+                      {/* Action */}
+                      {isPending ? (
+                        <div style={{
+                          padding: '9px 12px', borderRadius: 'var(--radius-md)',
+                          background: 'rgba(245,197,24,0.08)',
+                          border: '1px solid rgba(245,197,24,0.25)',
+                          fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
+                          letterSpacing: '0.5px',
+                        }}>
+                          ⏳ Request Pending
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleJoinRequest(team)}
+                          disabled={isLoading}
+                          style={{
+                            width: '100%', padding: '9px 12px',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--navy-border)',
+                            background: 'transparent',
+                            color: 'var(--text-muted)',
+                            fontSize: '12px', fontWeight: 600,
+                            cursor: isLoading ? 'not-allowed' : 'pointer',
+                            transition: 'var(--transition)',
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = 'rgba(245,197,24,0.4)'
+                            e.currentTarget.style.color = 'var(--gold)'
+                            e.currentTarget.style.background = 'rgba(245,197,24,0.06)'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = 'var(--navy-border)'
+                            e.currentTarget.style.color = 'var(--text-muted)'
+                            e.currentTarget.style.background = 'transparent'
+                          }}
+                        >
+                          {isLoading ? 'Sending…' : '+ Request to Join'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
       </div>
     </AppShell>

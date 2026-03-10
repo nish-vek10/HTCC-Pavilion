@@ -32,6 +32,7 @@ export default function AdminDashboardPage() {
   const [pending,       setPending]       = useState([])
   const [fixtures,      setFixtures]      = useState([])
   const [announcements, setAnnouncements] = useState([])
+  const [joinRequests,  setJoinRequests]  = useState([])
   const [loading,       setLoading]       = useState(true)
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_DASHBOARD }, [])
@@ -39,7 +40,7 @@ export default function AdminDashboardPage() {
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([fetchStats(), fetchPending(), fetchFixtures(), fetchAnnouncements()])
+    await Promise.all([fetchStats(), fetchPending(), fetchFixtures(), fetchAnnouncements(), fetchJoinRequests()])
     setLoading(false)
   }
 
@@ -90,6 +91,39 @@ export default function AdminDashboardPage() {
       .order('created_at', { ascending: false })
       .limit(3)
     if (data) setAnnouncements(data)
+  }
+
+  // ── Fetch pending team join requests ──
+  const fetchJoinRequests = async () => {
+    const { data } = await supabase
+      .from('join_requests')
+      .select('id, player_id, team_id, requested_at, profiles(full_name), teams(name)')
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: true })
+    if (data) setJoinRequests(data)
+  }
+
+  // ── Approve a team join request ──
+  const handleApproveJoin = async (req) => {
+    // Add to team_members
+    const { error: insertErr } = await supabase
+      .from('team_members')
+      .insert({ player_id: req.player_id, team_id: req.team_id, status: 'active' })
+
+    if (insertErr) { toast.error('Failed to add to team'); return }
+
+    // Mark request as approved
+    await supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id)
+
+    toast.success(`${req.profiles?.full_name} added to ${req.teams?.name}`)
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id))
+  }
+
+  // ── Reject a team join request ──
+  const handleRejectJoin = async (req) => {
+    await supabase.from('join_requests').update({ status: 'rejected' }).eq('id', req.id)
+    toast(`${req.profiles?.full_name}'s request for ${req.teams?.name} rejected`, { icon: '❌' })
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id))
   }
 
   // ── Approve a pending member ──
@@ -195,7 +229,7 @@ export default function AdminDashboardPage() {
 
             {loading ? (
               <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
-            ) : pending.length === 0 ? (
+            ) : pending.length === 0 && joinRequests.length === 0 ? (
               <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
                 <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>All Clear</div>
@@ -254,6 +288,74 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ── Team join requests ── */}
+            {!loading && joinRequests.length > 0 && (
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>
+                  Squad Join Requests
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {joinRequests.map(req => (
+                    <div key={req.id} className="card" style={{
+                      padding: '14px 18px',
+                      border: '1px solid rgba(245,197,24,0.15)',
+                      background: 'rgba(245,197,24,0.02)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {/* Avatar */}
+                          <div style={{
+                            width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
+                            background: 'rgba(245,197,24,0.1)',
+                            border: '1px solid rgba(245,197,24,0.2)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '12px', fontWeight: 700, color: 'var(--gold)',
+                          }}>
+                            {req.profiles?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+                              {req.profiles?.full_name}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Requesting to join{' '}
+                              <span style={{ color: 'var(--gold)', fontWeight: 600 }}>
+                                {req.teams?.name}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleApproveJoin(req)}
+                            style={{
+                              padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                              background: 'rgba(34,197,94,0.12)',
+                              border: '1px solid rgba(34,197,94,0.3)',
+                              color: 'var(--green)', fontSize: '13px', fontWeight: 600,
+                              cursor: 'pointer', transition: 'var(--transition)',
+                            }}>
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectJoin(req)}
+                            style={{
+                              padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                              background: 'rgba(239,68,68,0.08)',
+                              border: '1px solid rgba(239,68,68,0.2)',
+                              color: 'var(--red)', fontSize: '13px',
+                              cursor: 'pointer', transition: 'var(--transition)',
+                            }}>
+                            ✕ Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
