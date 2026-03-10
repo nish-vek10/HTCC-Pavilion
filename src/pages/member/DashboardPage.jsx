@@ -212,6 +212,15 @@ export default function DashboardPage() {
 
   const thisWeekend = fixtures.filter(f => isThisWeek(parseISO(f.match_date)))
 
+  // ── Group fixtures by date for organised card layout ──
+  const fixturesByDate = fixtures.reduce((groups, fixture) => {
+    const key = fixture.match_date
+    if (!groups[key]) groups[key] = []
+    groups[key].push(fixture)
+    return groups
+  }, {})
+  const sortedDates = Object.keys(fixturesByDate).sort()
+
   return (
     <AppShell>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
@@ -331,14 +340,60 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Fixtures grid ── */}
+        {/* ── Fixtures grouped by date ── */}
         {!loading && fixtures.length > 0 && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: '20px',
-          }}>
-            {fixtures.map(fixture => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+            {sortedDates.map(date => {
+              const group     = fixturesByDate[date]
+              const parsedDate = parseISO(date)
+              const isWeekendGroup = isThisWeek(parsedDate)
+              const isSunday  = parsedDate.getDay() === 0
+              const colCount  = Math.min(group.length, 4)
+
+              return (
+                <div key={date}>
+                  {/* Date group header */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '14px',
+                    marginBottom: '16px',
+                  }}>
+                    <div style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '13px', letterSpacing: '2px',
+                      color: isWeekendGroup ? 'var(--gold)' : 'var(--text-muted)',
+                      padding: '4px 14px',
+                      background: isWeekendGroup ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: isWeekendGroup ? '1px solid rgba(245,197,24,0.25)' : '1px solid var(--navy-border)',
+                      borderRadius: 'var(--radius-full)',
+                    }}>
+                      {format(parsedDate, 'EEEE d MMMM yyyy').toUpperCase()}
+                    </div>
+                    {isWeekendGroup && (
+                      <div style={{
+                        fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                        color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
+                        border: '1px solid rgba(34,197,94,0.2)',
+                        padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                      }}>
+                        THIS WEEKEND
+                      </div>
+                    )}
+                    <div style={{
+                      flex: 1, height: '1px',
+                      background: 'var(--navy-border)',
+                    }} />
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {group.length} fixture{group.length > 1 ? 's' : ''}
+                    </div>
+                  </div>
+
+                  {/* Cards row — auto columns based on count */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))`,
+                    gap: '16px',
+                  }}>
+                    {group.map(fixture => {
               const myStatus  = availability[fixture.id] || null
               const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
               const total     = counts.available + counts.unavailable + counts.tentative
@@ -531,7 +586,11 @@ export default function DashboardPage() {
               )
             })}
           </div>
-        )}
+        </div>
+      )
+    })}
+  </div>
+)}
 
         {/* ── Join a Team section — only show teams not yet joined ── */}
         {(() => {
