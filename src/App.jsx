@@ -1,0 +1,140 @@
+// pavilion-web/src/App.jsx
+
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+
+// ── Auth store ──
+import { useAuthStore } from './store/authStore.js'
+
+// ── Route guards ──
+import {
+  MemberRoute,
+  CaptainRoute,
+  AdminRoute,
+  PublicOnlyRoute,
+} from './components/layout/ProtectedRoute.jsx'
+
+// ── Public pages ──
+import LandingPage from './pages/public/LandingPage.jsx'
+import LoginPage   from './pages/public/LoginPage.jsx'
+import SignupPage  from './pages/public/SignupPage.jsx'
+import PendingPage from './pages/public/PendingPage.jsx'
+
+// ── Member pages ──
+import DashboardPage from './pages/member/DashboardPage.jsx'
+import ProfilePage from './pages/member/ProfilePage.jsx'
+import TeamsPage           from './pages/member/TeamsPage.jsx'
+import FixtureDetailPage   from './pages/member/FixtureDetailPage.jsx'
+import FixturesPage        from './pages/member/FixturesPage.jsx'
+import CaptainFixturesPage  from './pages/captain/CaptainFixturesPage.jsx'
+import SquadSelectionPage   from './pages/captain/SquadSelectionPage.jsx'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx'
+import AdminFixturesPage  from './pages/admin/AdminFixturesPage.jsx'
+import AdminMembersPage   from './pages/admin/AdminMembersPage.jsx'
+import AdminMatchdayPage      from './pages/admin/AdminMatchdayPage.jsx'
+import AdminAnnouncementsPage from './pages/admin/AdminAnnouncementsPage.jsx'
+
+// ── Constants ──
+import { ROUTES } from './lib/constants.js'
+
+export default function App() {
+  const init = useAuthStore(state => state.init)
+
+  // ── Initialise auth session on app mount ──
+  useEffect(() => {
+    init()
+  }, [init])
+
+  return (
+    <BrowserRouter>
+      {/* ── Global toast notifications ── */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: '#1A2F4A',
+            color:      '#F8F9FA',
+            border:     '1px solid rgba(255,255,255,0.08)',
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize:   '14px',
+            borderRadius: '10px',
+          },
+          success: {
+            iconTheme: { primary: '#22C55E', secondary: '#1A2F4A' },
+            duration: 4000,
+          },
+          error: {
+            iconTheme: { primary: '#EF4444', secondary: '#1A2F4A' },
+            duration: 5000,
+          },
+        }}
+      />
+
+      <Routes>
+        {/* ── Public routes — redirect to dashboard if already logged in ── */}
+        <Route path={ROUTES.LANDING} element={<LandingPage />} />
+
+        <Route path={ROUTES.LOGIN} element={
+          <PublicOnlyRoute><LoginPage /></PublicOnlyRoute>
+        } />
+
+        <Route path={ROUTES.SIGNUP} element={
+          <PublicOnlyRoute><SignupPage /></PublicOnlyRoute>
+        } />
+
+        {/* ── Pending approval — authenticated but not yet approved ── */}
+        <Route path={ROUTES.PENDING} element={<PendingPage />} />
+
+        {/* ── Member routes ── */}
+        <Route path={ROUTES.DASHBOARD} element={
+          <MemberRoute><DashboardPage /></MemberRoute>
+        } />
+
+        {/* ── Admin routes ── */}
+        <Route path={ROUTES.ADMIN_DASHBOARD} element={
+          <AdminRoute><AdminDashboardPage /></AdminRoute>
+        } />
+        <Route path={ROUTES.ADMIN_FIXTURES} element={
+          <AdminRoute><AdminFixturesPage /></AdminRoute>
+        } />
+        <Route path={ROUTES.ADMIN_MEMBERS} element={
+          <AdminRoute><AdminMembersPage /></AdminRoute>
+        } />
+
+        <Route path="/admin/matchday" element={
+          <AdminRoute><AdminMatchdayPage /></AdminRoute>
+        } />
+        <Route path={ROUTES.ADMIN_ANNOUNCEMENTS} element={
+          <AdminRoute><AdminAnnouncementsPage /></AdminRoute>
+        } />
+
+        <Route path={ROUTES.PROFILE} element={
+          <MemberRoute><ProfilePage /></MemberRoute>
+        } />
+
+        <Route path={ROUTES.TEAMS} element={
+          <MemberRoute><TeamsPage /></MemberRoute>
+        } />
+
+        <Route path="/fixture/:fixtureId" element={
+          <MemberRoute><FixtureDetailPage /></MemberRoute>
+        } />
+        <Route path="/fixtures" element={
+          <MemberRoute><FixturesPage /></MemberRoute>
+        } />
+
+        {/* ── Captain routes ── */}
+        <Route path="/captain/fixtures" element={
+          <CaptainRoute><CaptainFixturesPage /></CaptainRoute>
+        } />
+        <Route path="/captain/fixtures/:fixtureId/squad" element={
+          <CaptainRoute><SquadSelectionPage /></CaptainRoute>
+        } />
+
+        {/* ── Catch-all ── */}
+        <Route path="*" element={<Navigate to={ROUTES.LANDING} replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}

@@ -1,0 +1,458 @@
+// pavilion-web/src/pages/member/DashboardPage.jsx
+
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { format, isThisWeek, parseISO } from 'date-fns'
+import { supabase } from '../../lib/supabase.js'
+import { useAuthStore } from '../../store/authStore.js'
+import AppShell from '../../components/layout/AppShell.jsx'
+import {
+  PAGE_TITLES,
+  AVAILABILITY_CONFIG,
+  MATCH_TYPE_LABELS,
+  ROUTES,
+} from '../../lib/constants.js'
+
+// ─── CONFIGURABLE: How many upcoming fixtures to show ──
+const FIXTURES_LIMIT = 6
+
+export default function DashboardPage() {
+  const navigate  = useNavigate()
+  const profile   = useAuthStore(state => state.profile)
+  const isAdmin   = useAuthStore(state => state.isAdmin)
+  const isCaptain = useAuthStore(state => state.isCaptain)
+
+  const [fixtures,      setFixtures]      = useState([])
+  const [availability,  setAvailability]  = useState({})
+  const [fixtureCounts, setFixtureCounts] = useState({})
+  const [announcements, setAnnouncements] = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [submitting,    setSubmitting]    = useState(null)
+
+  useEffect(() => { document.title = PAGE_TITLES.DASHBOARD }, [])
+  useEffect(() => { if (profile) loadData() }, [profile])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchAnnouncements()])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Fetch upcoming fixtures for teams I belong to ──
+  const fetchFixtures = async () => {
+    const today = new Date().toISOString().split('T')[0]
+
+    const { data: myTeams } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('player_id', profile.id)
+      .eq('status', 'active')
+
+    const teamIds = myTeams?.map(t => t.team_id) || []
+    if (teamIds.length === 0) { setFixtures([]); return }
+
+    const { data, error } = await supabase
+      .from('fixtures')
+      .select('*, teams(id, name, day_type)')
+      .in('team_id', teamIds)
+      .gte('match_date', today)
+      .order('match_date', { ascending: true })
+      .limit(FIXTURES_LIMIT)
+
+    if (!error && data) setFixtures(data)
+  }
+
+  // ── Fetch my availability responses ──
+  const fetchMyAvailability = async () => {
+    const { data, error } = await supabase
+      .from('availability')
+      .select('fixture_id, status')
+      .eq('player_id', profile.id)
+
+    if (!error && data) {
+      const map = {}
+      data.forEach(a => { map[a.fixture_id] = a.status })
+      setAvailability(map)
+    }
+  }
+
+  // ── Fetch recent announcements relevant to this member ──
+  const fetchAnnouncements = async () => {
+    const { data } = await supabase
+      .from('announcements')
+      .select('id, title, body, target_role, created_at')
+      .in('target_role', ['all', profile.role])
+      .order('created_at', { ascending: false })
+      .limit(3)
+    if (data) setAnnouncements(data)
+  }
+
+  // ── Fetch availability counts per fixture ──
+  useEffect(() => {
+    if (fixtures.length > 0) fetchAllCounts()
+  }, [fixtures])
+
+  const fetchAllCounts = async () => {
+    const ids = fixtures.map(f => f.id)
+    const { data } = await supabase
+      .from('availability')
+      .select('fixture_id, status')
+      .in('fixture_id', ids)
+
+    if (data) {
+      const counts = {}
+      ids.forEach(id => { counts[id] = { available: 0, unavailable: 0, tentative: 0 } })
+      data.forEach(({ fixture_id, status }) => {
+        if (counts[fixture_id]) counts[fixture_id][status]++
+      })
+      setFixtureCounts(counts)
+    }
+  }
+
+  // ── Submit / update availability ──
+  const setStatus = async (e, fixtureId, status) => {
+    e.stopPropagation() // prevent card click navigating
+    setSubmitting(fixtureId)
+    try {
+      const existing = availability[fixtureId]
+      if (existing) {
+        await supabase
+          .from('availability')
+          .update({ status })
+          .eq('fixture_id', fixtureId)
+          .eq('player_id', profile.id)
+      } else {
+        await supabase
+          .from('availability')
+          .insert({ fixture_id: fixtureId, player_id: profile.id, status })
+      }
+      setAvailability(prev => ({ ...prev, [fixtureId]: status }))
+    } catch (err) {
+      console.error('[Dashboard] Failed to set availability:', err)
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  // ── Greeting ──
+  const greeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Good Morning'
+    if (h < 17) return 'Good Afternoon'
+    return 'Good Evening'
+  }
+
+  const thisWeekend = fixtures.filter(f => isThisWeek(parseISO(f.match_date)))
+
+  return (
+    <AppShell>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+
+        {/* ── Header ── */}
+        <div style={{ marginBottom: '40px' }} className="animate-fade-in">
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>
+            {greeting()},
+          </div>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(32px, 5vw, 52px)',
+            letterSpacing: '2px', lineHeight: 1, marginBottom: '8px',
+          }}>
+            {profile?.full_name?.split(' ')[0].toUpperCase() || 'PLAYER'} 🏏
+          </h1>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+            {thisWeekend.length > 0
+              ? `You have ${thisWeekend.length} fixture${thisWeekend.length > 1 ? 's' : ''} this weekend — set your availability below.`
+              : 'No fixtures this weekend. Check upcoming fixtures below.'}
+          </div>
+        </div>
+
+        {/* ── Quick stats row ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '16px', marginBottom: '40px',
+        }}>
+          {[
+            { label: 'This Weekend', value: thisWeekend.length,                                                    sub: 'fixtures',      color: 'var(--gold)'        },
+            { label: 'Responded',    value: Object.keys(availability).length,                                      sub: 'this season',   color: 'var(--green)'       },
+            { label: 'Available',    value: Object.values(availability).filter(s => s === 'available').length,     sub: 'confirmed',     color: 'var(--green)'       },
+            { label: 'Upcoming',     value: fixtures.length,                                                       sub: 'total fixtures', color: 'var(--text-muted)' },
+          ].map(stat => (
+            <div key={stat.label} className="card" style={{ padding: '20px 22px' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '38px', letterSpacing: '1px', color: stat.color, lineHeight: 1 }}>
+                {stat.value}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '6px' }}>
+                {stat.label}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {stat.sub}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Announcements ── */}
+        {!loading && announcements.length > 0 && (
+          <div style={{ marginBottom: '40px' }}>
+            <div className="section-label">Club News</div>
+            <div className="section-title" style={{ fontSize: '24px', marginBottom: '16px' }}>
+              Announcements
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {announcements.map(ann => (
+                <div key={ann.id} className="card" style={{ padding: '18px 22px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginBottom: '6px' }}>
+                    {format(parseISO(ann.created_at), 'EEE d MMM yyyy, HH:mm')}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    {ann.title}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {ann.body}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Fixtures section header ── */}
+        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div className="section-label">Your Fixtures</div>
+            <div className="section-title" style={{ fontSize: '28px' }}>Set Availability</div>
+          </div>
+          {(isCaptain() || isAdmin()) && (
+            <button className="btn btn--secondary" style={{ fontSize: '13px' }}
+              onClick={() => navigate('/captain/fixtures')}>
+              + Add Fixture
+            </button>
+          )}
+        </div>
+
+        {/* Loading state */}
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
+            <div style={{
+              width: '36px', height: '36px', margin: '0 auto 16px',
+              border: '3px solid var(--navy-light)',
+              borderTop: '3px solid var(--gold)',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            Loading your fixtures…
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && fixtures.length === 0 && (
+          <div className="card" style={{ padding: '60px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏏</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', letterSpacing: '1px', marginBottom: '8px' }}>
+              NO FIXTURES YET
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '24px' }}>
+              You haven't been added to any teams yet, or no fixtures are scheduled.
+            </div>
+            <button className="btn btn--primary" onClick={() => navigate(ROUTES.TEAMS)}>
+              View My Teams
+            </button>
+          </div>
+        )}
+
+        {/* ── Fixtures grid ── */}
+        {!loading && fixtures.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+            gap: '20px',
+          }}>
+            {fixtures.map(fixture => {
+              const myStatus  = availability[fixture.id] || null
+              const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
+              const total     = counts.available + counts.unavailable + counts.tentative
+              const isLoading = submitting === fixture.id
+              const matchDate = parseISO(fixture.match_date)
+              const isWeekend = isThisWeek(matchDate)
+
+              return (
+                <div
+                  key={fixture.id}
+                  className="card card--hoverable"
+                  onClick={() => navigate('/fixture/' + fixture.id)}
+                  style={{ overflow: 'hidden', opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+                >
+
+                  {/* Card top */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, var(--bg-elevated), var(--navy-mid))',
+                    padding: '16px 20px 14px',
+                    borderBottom: '1px solid var(--navy-border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                  }}>
+                    <div style={{
+                      fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px',
+                      textTransform: 'uppercase', color: 'var(--gold)',
+                      background: 'rgba(245,197,24,0.1)',
+                      padding: '4px 10px', borderRadius: '6px',
+                      border: '1px solid rgba(245,197,24,0.2)',
+                    }}>
+                      {fixture.teams?.name}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isWeekend && (
+                        <div style={{
+                          fontSize: '10px', color: 'var(--green)',
+                          background: 'rgba(34,197,94,0.1)',
+                          padding: '3px 8px', borderRadius: '4px',
+                          border: '1px solid rgba(34,197,94,0.2)',
+                          fontWeight: 700, letterSpacing: '1px',
+                        }}>
+                          THIS WEEK
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card body */}
+                  <div style={{ padding: '18px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: 'var(--gold)', letterSpacing: '2px' }}>VS</span>
+                      <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
+                      {[
+                        { icon: '📅', text: format(matchDate, 'EEE d MMM yyyy') },
+                        { icon: '🕐', text: fixture.match_time?.slice(0, 5) || '12:30' },
+                        { icon: '📍', text: fixture.venue },
+                        {
+                          icon: fixture.home_away === 'home' ? '🏠' : fixture.home_away === 'away' ? '✈️' : '⚖️',
+                          text: fixture.home_away === 'home' ? 'Home' : fixture.home_away === 'away' ? 'Away' : 'Neutral',
+                        },
+                      ].map(m => (
+                        <div key={m.text} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          <span>{m.icon}</span> {m.text}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Availability progress bar */}
+                    {total > 0 && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{
+                          height: '5px', background: 'rgba(255,255,255,0.06)',
+                          borderRadius: '3px', overflow: 'hidden',
+                          display: 'flex', marginBottom: '8px',
+                        }}>
+                          {counts.available   > 0 && <div style={{ flex: counts.available,   background: 'var(--green)', transition: 'flex 0.5s' }} />}
+                          {counts.tentative   > 0 && <div style={{ flex: counts.tentative,   background: 'var(--amber)', transition: 'flex 0.5s' }} />}
+                          {counts.unavailable > 0 && <div style={{ flex: counts.unavailable, background: 'var(--red)',   transition: 'flex 0.5s' }} />}
+                        </div>
+                        <div style={{ display: 'flex', gap: '14px' }}>
+                          {[
+                            { count: counts.available,   color: 'var(--green)', label: 'Available' },
+                            { count: counts.tentative,   color: 'var(--amber)', label: 'Tentative' },
+                            { count: counts.unavailable, color: 'var(--red)',   label: 'No' },
+                          ].map(c => (
+                            <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c.color }} />
+                              <span style={{ color: c.color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.count}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>{c.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Availability pills ── */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {['available', 'unavailable', 'tentative'].map(status => {
+                        const cfg      = AVAILABILITY_CONFIG[status]
+                        const isActive = myStatus === status
+                        return (
+                          <button
+                            key={status}
+                            onClick={(e) => setStatus(e, fixture.id, status)}
+                            disabled={isLoading}
+                            style={{
+                              flex: 1,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                              padding: '10px 6px',
+                              borderRadius: 'var(--radius-md)',
+                              border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
+                              background: isActive ? cfg.fillColor : 'transparent',
+                              color: isActive ? cfg.color : 'var(--text-muted)',
+                              fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                              cursor: isLoading ? 'not-allowed' : 'pointer',
+                              transition: 'var(--transition)',
+                              letterSpacing: '0.3px',
+                              boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
+                            }}
+                          >
+                            <div style={{
+                              width: '9px', height: '9px', borderRadius: '50%',
+                              background: isActive ? cfg.color : 'var(--text-faint)',
+                              boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none',
+                            }} />
+                            {status === 'available' ? 'Available' : status === 'unavailable' ? 'Unavailable' : 'Tentative'}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {myStatus && (
+                      <div style={{
+                        marginTop: '12px', textAlign: 'center',
+                        fontSize: '12px', color: AVAILABILITY_CONFIG[myStatus]?.color,
+                        fontWeight: 600,
+                      }}>
+                        ✓ You're marked as {myStatus} for this match
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card footer */}
+                  <div style={{
+                    padding: '12px 20px',
+                    borderTop: '1px solid var(--navy-border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <button
+                      className="btn btn--ghost"
+                      style={{ fontSize: '13px', padding: '6px 12px' }}
+                      onClick={(e) => { e.stopPropagation(); navigate('/fixture/' + fixture.id) }}
+                    >
+                      View Details →
+                    </button>
+                    {fixture.availability_deadline && (
+                      <div style={{
+                        fontSize: '11px', color: 'var(--text-muted)',
+                        background: 'rgba(255,255,255,0.04)',
+                        padding: '4px 10px', borderRadius: '6px',
+                        border: '1px solid var(--navy-border)',
+                      }}>
+                        Deadline: {format(parseISO(fixture.availability_deadline), 'EEE d MMM')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+      </div>
+    </AppShell>
+  )
+}
