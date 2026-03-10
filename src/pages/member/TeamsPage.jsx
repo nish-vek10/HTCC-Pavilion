@@ -206,19 +206,36 @@ export default function TeamsPage() {
                   return (
                     <div key={team.id} className="card" style={{ overflow: 'hidden' }}>
 
-                      {/* Team header */}
+                      {/* Team header — golden accent */}
                       <div style={{
-                        background: 'linear-gradient(135deg, var(--bg-elevated), var(--navy-mid))',
+                        background: 'linear-gradient(135deg, rgba(245,197,24,0.07), var(--navy-mid))',
                         padding: '18px 24px',
-                        borderBottom: '1px solid var(--navy-border)',
+                        borderBottom: '1px solid rgba(245,197,24,0.15)',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        borderTop: '3px solid rgba(245,197,24,0.5)',
                       }}>
-                        <div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontSize: '22px', letterSpacing: '1px', color: 'var(--text-primary)' }}>
-                            {team.name.toUpperCase()}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          {/* Team icon badge */}
+                          <div style={{
+                            width: '42px', height: '42px', borderRadius: '10px',
+                            background: 'rgba(245,197,24,0.12)',
+                            border: '1px solid rgba(245,197,24,0.3)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '18px', flexShrink: 0,
+                          }}>
+                            {team.day_type === 'sunday' ? '☀️' : '🏏'}
                           </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>
-                            {team.day_type} fixture team
+                          <div>
+                            <div style={{
+                              fontFamily: 'var(--font-display)', fontSize: '22px',
+                              letterSpacing: '2px', color: 'var(--gold)',
+                              textShadow: '0 0 20px rgba(245,197,24,0.2)',
+                            }}>
+                              {team.name.toUpperCase()}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>
+                              {team.day_type} fixture team
+                            </div>
                           </div>
                         </div>
                         <div style={{
@@ -258,7 +275,8 @@ export default function TeamsPage() {
                                 }}>
                                   {/* Date + opponent */}
                                   <div style={{ flex: 1, minWidth: '180px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                    {/* Line 1: Home/Away · Date · Competition */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                                       <span style={{
                                         fontSize: '11px', fontWeight: 700,
                                         color: fixture.home_away === 'home' ? 'var(--green)' : 'var(--amber)',
@@ -268,15 +286,21 @@ export default function TeamsPage() {
                                       }}>
                                         {fixture.home_away === 'home' ? '🏠 HOME' : '✈️ AWAY'}
                                       </span>
+                                      <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px' }}>·</span>
+                                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
+                                        {format(parseISO(fixture.match_date), 'd MMMM yy').toUpperCase()}
+                                      </span>
+                                      <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px' }}>·</span>
                                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                         {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
                                       </span>
                                     </div>
+                                    {/* Match title */}
                                     <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
                                       HTCC <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>VS</span> {fixture.opponent}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px', display: 'flex', gap: '12px' }}>
-                                      <span>📅 {format(parseISO(fixture.match_date), 'EEE d MMM')}</span>
+                                    {/* Line 2: Time · Venue */}
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                                       <span>🕐 {fixture.match_time?.slice(0, 5)}</span>
                                       <span>📍 {fixture.venue}</span>
                                     </div>
