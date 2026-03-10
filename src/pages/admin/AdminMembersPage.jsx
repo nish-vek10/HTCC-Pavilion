@@ -90,10 +90,15 @@ export default function AdminMembersPage() {
       .update({ role: newRole })
       .eq('id', memberId)
 
-    if (error) { toast.error('Failed to update role'); return }
+    if (error) { toast.error('Failed to update role: ' + error.message); return }
 
-    toast.success(`${memberName} is now ${newRole}`)
-    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
+    if (newRole === 'rejected') {
+      toast(`${memberName}'s application rejected`, { icon: '❌' })
+      setMembers(prev => prev.filter(m => m.id !== memberId))
+    } else {
+      toast.success(`${memberName} is now ${newRole}`)
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
+    }
   }
 
   // ── Assign member to team ──
@@ -267,17 +272,46 @@ export default function AdminMembersPage() {
                       </div>
                     </div>
 
-                    {/* Role selector */}
-                    {!isCurrentUser && member.role !== 'superadmin' && (
+                    {/* Pending — show Approve / Reject buttons */}
+                    {!isCurrentUser && member.role === 'pending' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleRoleChange(member.id, 'member', member.full_name)}
+                          style={{
+                            padding: '8px 18px', borderRadius: 'var(--radius-md)',
+                            background: 'rgba(34,197,94,0.12)',
+                            border: '1px solid rgba(34,197,94,0.3)',
+                            color: 'var(--green)', fontSize: '13px', fontWeight: 700,
+                            cursor: 'pointer', transition: 'var(--transition)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          onClick={() => handleRoleChange(member.id, 'rejected', member.full_name)}
+                          style={{
+                            padding: '8px 18px', borderRadius: 'var(--radius-md)',
+                            background: 'rgba(239,68,68,0.08)',
+                            border: '1px solid rgba(239,68,68,0.2)',
+                            color: 'var(--red)', fontSize: '13px',
+                            cursor: 'pointer', transition: 'var(--transition)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          ✕ Reject
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Approved — show role dropdown */}
+                    {!isCurrentUser && member.role !== 'superadmin' && member.role !== 'pending' && (
                       <select
                         className="input"
                         style={{ width: '130px', margin: 0, fontSize: '13px', padding: '8px 12px' }}
-                        value={member.role === 'pending' ? 'pending' : member.role}
+                        value={member.role}
                         onChange={e => handleRoleChange(member.id, e.target.value, member.full_name)}
                       >
-                        {member.role === 'pending' && (
-                          <option value="pending" disabled>Pending…</option>
-                        )}
                         {getRoleOptions().map(r => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
