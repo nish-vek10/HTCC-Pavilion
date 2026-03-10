@@ -17,6 +17,13 @@ const AUDIENCE_META = {
   admin:   { color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', label: 'Admins' },
 }
 
+// ─── Home/Away display config ──────────────────────
+const HOME_AWAY_CONFIG = {
+  home:    { emoji: '🏠', label: 'Home',    color: '#22C55E' },
+  away:    { emoji: '✈️',  label: 'Away',    color: '#60A5FA' },
+  neutral: { emoji: '⚖️', label: 'Neutral', color: '#8B9BB4' },
+}
+
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
   const profile  = useAuthStore(state => state.profile)
@@ -282,25 +289,39 @@ export default function AdminDashboardPage() {
                   <div key={fixture.id} className="card" style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                        {/* Line 1: Team · dot · Home/Away · Competition */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px', flexWrap: 'wrap' }}>
                           <span style={{
                             fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-                            color: 'var(--gold)',
-                            background: 'rgba(245,197,24,0.1)',
+                            color: 'var(--gold)', background: 'rgba(245,197,24,0.1)',
                             padding: '2px 8px', borderRadius: '4px',
                             border: '1px solid rgba(245,197,24,0.2)',
                           }}>
                             {fixture.teams?.name}
                           </span>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            {fixture.match_type}
+                          <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px' }}>·</span>
+                          <span style={{
+                            fontSize: '11px', fontWeight: 600,
+                            color: HOME_AWAY_CONFIG[fixture.home_away]?.color || 'var(--text-muted)',
+                          }}>
+                            {HOME_AWAY_CONFIG[fixture.home_away]?.emoji} {HOME_AWAY_CONFIG[fixture.home_away]?.label || fixture.home_away}
+                          </span>
+                          <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px' }}>·</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
                           </span>
                         </div>
+                        {/* Match title */}
                         <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
-                          vs {fixture.opponent}
+                          HTCC vs {fixture.opponent}
                         </div>
+                        {/* Line 2: Venue */}
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                          📍 {fixture.venue}
+                        </div>
+                        {/* Line 3: Date · Time */}
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          {format(parseISO(fixture.match_date), 'EEE d MMM')} · {fixture.venue}
+                          🗓 {format(parseISO(fixture.match_date), 'EEE d MMM')}{fixture.match_time ? ` · 🕐 ${fixture.match_time.slice(0,5)}` : ''}
                         </div>
                       </div>
                       <div style={{

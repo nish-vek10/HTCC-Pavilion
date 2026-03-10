@@ -143,6 +143,7 @@ export const PAGE_TITLES = {
   CAPTAIN_AVAIL:       'Pavilion · Availability Board',
   CAPTAIN_SQUAD:       'Pavilion · Squad Selector',
   ADMIN_OVERVIEW:      'Pavilion · Admin Overview',
+  ADMIN_DASHBOARD:     'Pavilion · Admin Overview',  // alias used by AdminDashboardPage
   ADMIN_MATCHDAY:      'Pavilion · Matchday — Admin',
   ADMIN_FIXTURES:      'Pavilion · Fixtures — Admin',
   ADMIN_MEMBERS:       'Pavilion · Members — Admin',
