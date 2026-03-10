@@ -8,12 +8,7 @@ import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { PAGE_TITLES, ROLES } from '../../lib/constants.js'
 
-// ─── CONFIGURABLE: Role options for dropdown ───────
-const ROLE_OPTIONS = [
-  { value: 'member',   label: 'Member' },
-  { value: 'captain',  label: 'Captain' },
-  { value: 'admin',    label: 'Admin' },
-]
+
 
 // ─── Role badge colours ────────────────────────────
 const ROLE_COLOURS = {
@@ -25,8 +20,9 @@ const ROLE_COLOURS = {
 }
 
 export default function AdminMembersPage() {
-  const currentUser = useAuthStore(state => state.profile)
-  const profile     = useAuthStore(state => state.profile)
+  const currentUser    = useAuthStore(state => state.profile)
+  const profile        = useAuthStore(state => state.profile)
+  const isSuperAdmin   = useAuthStore(state => state.isSuperAdmin)
 
   const [members,  setMembers]  = useState([])
   const [teams,    setTeams]    = useState([])
@@ -36,6 +32,23 @@ export default function AdminMembersPage() {
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_MEMBERS }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
+
+  // ── Role options based on who is viewing ──
+  // Superadmin can promote up to admin
+  // Admin can only promote up to captain — cannot grant admin
+  const getRoleOptions = () => {
+    if (isSuperAdmin?.()) {
+      return [
+        { value: 'member',  label: 'Member'  },
+        { value: 'captain', label: 'Captain' },
+        { value: 'admin',   label: 'Admin'   },
+      ]
+    }
+    return [
+      { value: 'member',  label: 'Member'  },
+      { value: 'captain', label: 'Captain' },
+    ]
+  }
 
   const loadAll = async () => {
     setLoading(true)
@@ -62,8 +75,13 @@ export default function AdminMembersPage() {
 
   // ── Update member role ──
   const handleRoleChange = async (memberId, newRole, memberName) => {
-    if (memberId === currentUser.id && newRole !== 'superadmin') {
+    if (memberId === currentUser.id) {
       toast.error("You can't change your own role")
+      return
+    }
+    // Only superadmin can grant admin role
+    if (newRole === 'admin' && !isSuperAdmin?.()) {
+      toast.error('Only a Super Admin can promote members to Admin')
       return
     }
 
@@ -260,7 +278,7 @@ export default function AdminMembersPage() {
                         {member.role === 'pending' && (
                           <option value="pending" disabled>Pending…</option>
                         )}
-                        {ROLE_OPTIONS.map(r => (
+                        {getRoleOptions().map(r => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
                       </select>
