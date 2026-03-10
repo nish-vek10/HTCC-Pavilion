@@ -95,11 +95,12 @@ export default function AdminDashboardPage() {
 
   // ── Fetch pending team join requests ──
   const fetchJoinRequests = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('join_requests')
-      .select('id, player_id, team_id, requested_at, profiles(full_name), teams(name)')
+      .select('id, player_id, team_id, profiles(full_name), teams(name)')
       .eq('status', 'pending')
-      .order('requested_at', { ascending: true })
+      .order('id', { ascending: true })
+    if (error) console.error('[AdminDashboard] fetchJoinRequests error:', error.message)
     if (data) setJoinRequests(data)
   }
 
