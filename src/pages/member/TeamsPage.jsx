@@ -126,6 +126,22 @@ export default function TeamsPage() {
     }
   }
 
+  // ── Cancel a pending join request ──
+  const handleCancelJoinRequest = async (teamId, teamName) => {
+    try {
+      await supabase
+        .from('join_requests')
+        .delete()
+        .eq('player_id', profile.id)
+        .eq('team_id', teamId)
+        .eq('status', 'pending')
+      toast('Join request cancelled', { icon: '↩️' })
+      await fetchJoinRequests()
+    } catch {
+      toast.error('Failed to cancel request')
+    }
+  }
+
   // ── Submit join request ──
   const handleJoinRequest = async () => {
     const team = joinModal.team
@@ -373,14 +389,32 @@ export default function TeamsPage() {
                           ✓ Member
                         </div>
                       ) : pending ? (
-                        <div style={{
-                          padding: '8px', borderRadius: 'var(--radius-md)',
-                          background: 'rgba(245,197,24,0.06)',
-                          border: '1px solid rgba(245,197,24,0.2)',
-                          fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
-                        }}>
+                        <button
+                          className="btn"
+                          onClick={() => handleCancelJoinRequest(team.id, team.name)}
+                          style={{
+                            width: '100%', padding: '8px',
+                            borderRadius: 'var(--radius-md)',
+                            background: 'rgba(245,197,24,0.06)',
+                            border: '1px solid rgba(245,197,24,0.2)',
+                            fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
+                            cursor: 'pointer', transition: 'var(--transition)',
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.textContent = '✕ Cancel Request'
+                            e.currentTarget.style.background = 'rgba(239,68,68,0.08)'
+                            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'
+                            e.currentTarget.style.color = 'var(--red)'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.textContent = '⏳ Pending'
+                            e.currentTarget.style.background = 'rgba(245,197,24,0.06)'
+                            e.currentTarget.style.borderColor = 'rgba(245,197,24,0.2)'
+                            e.currentTarget.style.color = 'var(--amber)'
+                          }}
+                        >
                           ⏳ Pending
-                        </div>
+                        </button>
                       ) : (
                         <button
                           className="btn btn--ghost"

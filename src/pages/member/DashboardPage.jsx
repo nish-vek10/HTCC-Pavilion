@@ -102,6 +102,25 @@ export default function DashboardPage() {
     if (data) setJoinRequests(data)
   }
 
+  // ── Cancel a pending join request ──
+  const handleCancelJoinRequest = async (team) => {
+    setJoinLoading(team.id)
+    try {
+      await supabase
+        .from('join_requests')
+        .delete()
+        .eq('player_id', profile.id)
+        .eq('team_id', team.id)
+        .eq('status', 'pending')
+      toast('Join request cancelled', { icon: '↩️' })
+      await fetchJoinRequests()
+    } catch {
+      toast.error('Failed to cancel request')
+    } finally {
+      setJoinLoading(null)
+    }
+  }
+
   // ── Submit a join request ──
   const handleJoinRequest = async (team) => {
     setJoinLoading(team.id)
@@ -584,15 +603,33 @@ export default function DashboardPage() {
 
                       {/* Action */}
                       {isPending ? (
-                        <div style={{
-                          padding: '9px 12px', borderRadius: 'var(--radius-md)',
-                          background: 'rgba(245,197,24,0.08)',
-                          border: '1px solid rgba(245,197,24,0.25)',
-                          fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
-                          letterSpacing: '0.5px',
-                        }}>
-                          ⏳ Request Pending
-                        </div>
+                        <button
+                          onClick={() => handleCancelJoinRequest(team)}
+                          disabled={isLoading}
+                          style={{
+                            width: '100%', padding: '9px 12px',
+                            borderRadius: 'var(--radius-md)',
+                            background: 'rgba(245,197,24,0.08)',
+                            border: '1px solid rgba(245,197,24,0.25)',
+                            fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
+                            letterSpacing: '0.5px', cursor: isLoading ? 'not-allowed' : 'pointer',
+                            transition: 'var(--transition)',
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.textContent = '✕ Cancel Request'
+                            e.currentTarget.style.background = 'rgba(239,68,68,0.08)'
+                            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'
+                            e.currentTarget.style.color = 'var(--red)'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.textContent = '⏳ Request Pending'
+                            e.currentTarget.style.background = 'rgba(245,197,24,0.08)'
+                            e.currentTarget.style.borderColor = 'rgba(245,197,24,0.25)'
+                            e.currentTarget.style.color = 'var(--amber)'
+                          }}
+                        >
+                          {isLoading ? 'Cancelling…' : '⏳ Request Pending'}
+                        </button>
                       ) : (
                         <button
                           onClick={() => handleJoinRequest(team)}
