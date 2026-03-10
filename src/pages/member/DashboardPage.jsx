@@ -356,20 +356,35 @@ export default function DashboardPage() {
 
                   {/* Card top */}
                   <div style={{
-                    background: 'linear-gradient(135deg, var(--bg-elevated), var(--navy-mid))',
-                    padding: '16px 20px 14px',
-                    borderBottom: '1px solid var(--navy-border)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                    background: 'linear-gradient(135deg, rgba(245,197,24,0.06), var(--navy-mid))',
+                    padding: '14px 18px',
+                    borderBottom: '1px solid rgba(245,197,24,0.12)',
+                    borderTop: '3px solid rgba(245,197,24,0.4)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    flexWrap: 'wrap', gap: '8px',
                   }}>
-                    <div style={{
-                      fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px',
-                      textTransform: 'uppercase', color: 'var(--gold)',
-                      background: 'rgba(245,197,24,0.1)',
-                      padding: '4px 10px', borderRadius: '6px',
-                      border: '1px solid rgba(245,197,24,0.2)',
-                    }}>
-                      {fixture.teams?.name}
+                    {/* Left: Team badge + Home/Away badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px',
+                        textTransform: 'uppercase', color: 'var(--gold)',
+                        background: 'rgba(245,197,24,0.12)',
+                        padding: '4px 10px', borderRadius: '6px',
+                        border: '1px solid rgba(245,197,24,0.3)',
+                      }}>
+                        {fixture.teams?.name}
+                      </div>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, letterSpacing: '1px',
+                        color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
+                        background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
+                        border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                        padding: '4px 10px', borderRadius: '6px',
+                      }}>
+                        {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                      </div>
                     </div>
+                    {/* Right: This week + competition */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {isWeekend && (
                         <div style={{
@@ -396,20 +411,21 @@ export default function DashboardPage() {
                       <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
                     </div>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
-                      {[
-                        { icon: '📅', text: format(matchDate, 'EEE d MMM yyyy') },
-                        { icon: '🕐', text: fixture.match_time?.slice(0, 5) || '12:30' },
-                        { icon: '📍', text: fixture.venue },
-                        {
-                          icon: fixture.home_away === 'home' ? '🏠' : fixture.home_away === 'away' ? '✈️' : '⚖️',
-                          text: fixture.home_away === 'home' ? 'Home' : fixture.home_away === 'away' ? 'Away' : 'Neutral',
-                        },
-                      ].map(m => (
-                        <div key={m.text} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--text-muted)' }}>
-                          <span>{m.icon}</span> {m.text}
-                        </div>
-                      ))}
+                    {/* Date + Time — bold */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <span>📅</span>
+                        {format(matchDate, 'EEE d MMM yyyy').toUpperCase()}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <span>🕐</span>
+                        {fixture.match_time?.slice(0, 5) || '12:30'}
+                      </div>
+                    </div>
+                    {/* Venue — slightly lighter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '18px' }}>
+                      <span>📍</span>
+                      {fixture.venue}
                     </div>
 
                     {/* Availability progress bar */}
