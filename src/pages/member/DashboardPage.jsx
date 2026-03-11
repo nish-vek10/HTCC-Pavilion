@@ -352,45 +352,68 @@ export default function DashboardPage() {
 
               return (
                 <div key={date}>
-                  {/* Date group header */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '14px',
-                    marginBottom: '16px',
-                  }}>
-                    <div style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: '13px', letterSpacing: '2px',
-                      color: isWeekendGroup ? 'var(--gold)' : 'var(--text-muted)',
-                      padding: '4px 14px',
-                      background: isWeekendGroup ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.03)',
-                      border: isWeekendGroup ? '1px solid rgba(245,197,24,0.25)' : '1px solid var(--navy-border)',
-                      borderRadius: 'var(--radius-full)',
-                    }}>
-                      {format(parsedDate, 'EEEE d MMMM yyyy').toUpperCase()}
-                    </div>
-                    {isWeekendGroup && (
-                      <div style={{
-                        fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-                        color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
-                        border: '1px solid rgba(34,197,94,0.2)',
-                        padding: '3px 10px', borderRadius: 'var(--radius-full)',
-                      }}>
-                        THIS WEEKEND
-                      </div>
-                    )}
-                    <div style={{
-                      flex: 1, height: '1px',
-                      background: 'var(--navy-border)',
-                    }} />
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {group.length} fixture{group.length > 1 ? 's' : ''}
-                    </div>
-                  </div>
+                  {/* Date group header — gold for Saturday, blue for Sunday */}
+                  {(() => {
+                    const isSundayGroup = parsedDate.getDay() === 0
+                    const accentColor   = isSundayGroup ? '#60A5FA' : 'var(--gold)'
+                    const accentBg      = isSundayGroup ? 'rgba(96,165,250,0.08)' : 'rgba(245,197,24,0.08)'
+                    const accentBorder  = isSundayGroup ? 'rgba(96,165,250,0.25)' : 'rgba(245,197,24,0.25)'
+                    const dayLabel      = isSundayGroup ? '☀️ SUNDAY' : '🏏 SATURDAY'
 
-                  {/* Cards row — auto columns based on count */}
+                    return (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '14px',
+                        marginBottom: '16px',
+                      }}>
+                        {/* Day type pill */}
+                        <div style={{
+                          fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
+                          color: accentColor,
+                          background: accentBg,
+                          border: `1px solid ${accentBorder}`,
+                          padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                        }}>
+                          {dayLabel}
+                        </div>
+                        {/* Full date pill */}
+                        <div style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: '13px', letterSpacing: '2px',
+                          color: accentColor,
+                          padding: '4px 14px',
+                          background: accentBg,
+                          border: `1px solid ${accentBorder}`,
+                          borderRadius: 'var(--radius-full)',
+                        }}>
+                          {format(parsedDate, 'EEEE d MMMM yyyy').toUpperCase()}
+                        </div>
+                        {/* This weekend badge */}
+                        {isWeekendGroup && (
+                          <div style={{
+                            fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                            color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
+                            border: '1px solid rgba(34,197,94,0.2)',
+                            padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                          }}>
+                            THIS WEEKEND
+                          </div>
+                        )}
+                        {/* Divider line */}
+                        <div style={{ flex: 1, height: '1px', background: accentBorder }} />
+                        {/* Fixture count */}
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {group.length} fixture{group.length > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Cards — 4 cards = 2x2, otherwise auto columns */}
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))`,
+                    gridTemplateColumns: colCount === 4
+                      ? 'repeat(2, minmax(0, 1fr))'
+                      : `repeat(${colCount}, minmax(0, 1fr))`,
                     gap: '16px',
                   }}>
                     {group.map(fixture => {
