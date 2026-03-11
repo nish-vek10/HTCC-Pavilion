@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [allTeams,      setAllTeams]      = useState([])
   const [joinRequests,  setJoinRequests]  = useState([])
   const [joinLoading,   setJoinLoading]   = useState(null)
+  const [weekOffset,    setWeekOffset]    = useState(0)  // 0 = current week
 
   useEffect(() => { document.title = PAGE_TITLES.DASHBOARD }, [])
   useEffect(() => { if (profile) loadData() }, [profile])
@@ -39,15 +40,30 @@ export default function DashboardPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchAnnouncements(), fetchAllTeams(), fetchJoinRequests()])
+      await Promise.all([fetchFixtures(weekOffset), fetchMyAvailability(), fetchAnnouncements(), fetchAllTeams(), fetchJoinRequests()])
     } finally {
       setLoading(false)
     }
   }
 
-  // ── Fetch upcoming fixtures for teams I belong to ──
-  const fetchFixtures = async () => {
-    const today = new Date().toISOString().split('T')[0]
+  // ── Compute Saturday + Sunday dates for a given week offset ──
+  const getWeekDates = (offset) => {
+    const today = new Date()
+    const day   = today.getDay()                      // 0=Sun, 6=Sat
+    const diffToSat = day === 6 ? 0 : (6 - day)
+    const sat   = new Date(today)
+    sat.setDate(today.getDate() + diffToSat + offset * 7)
+    const sun   = new Date(sat)
+    sun.setDate(sat.getDate() + 1)
+    return {
+      saturday: sat.toISOString().split('T')[0],
+      sunday:   sun.toISOString().split('T')[0],
+    }
+  }
+
+  // ── Fetch fixtures for this week's Saturday + Sunday only ──
+  const fetchFixtures = async (offset = 0) => {
+    const { saturday, sunday } = getWeekDates(offset)
 
     const { data: myTeams } = await supabase
       .from('team_members')
@@ -62,9 +78,8 @@ export default function DashboardPage() {
       .from('fixtures')
       .select('*, teams(id, name, day_type)')
       .in('team_id', teamIds)
-      .gte('match_date', today)
+      .in('match_date', [saturday, sunday])
       .order('match_date', { ascending: true })
-      .limit(FIXTURES_LIMIT)
 
     if (!error && data) setFixtures(data)
   }
@@ -155,6 +170,11 @@ export default function DashboardPage() {
     if (data) setAnnouncements(data)
   }
 
+  // ── Re-fetch fixtures when week changes ──
+  useEffect(() => {
+    if (profile) fetchFixtures(weekOffset)
+  }, [weekOffset])
+
   // ── Fetch availability counts per fixture ──
   useEffect(() => {
     if (fixtures.length > 0) fetchAllCounts()
@@ -210,16 +230,20 @@ export default function DashboardPage() {
     return 'Good Evening'
   }
 
-  const thisWeekend = fixtures.filter(f => isThisWeek(parseISO(f.match_date)))
+  const { saturday: satDate, sunday: sunDate } = getWeekDates(weekOffset)
+  const satFixtures  = fixtures.filter(f => f.match_date === satDate)
+  const sunFixtures  = fixtures.filter(f => f.match_date === sunDate)
+  const thisWeekend  = weekOffset === 0 ? fixtures : []
 
-  // ── Group fixtures by date for organised card layout ──
-  const fixturesByDate = fixtures.reduce((groups, fixture) => {
-    const key = fixture.match_date
-    if (!groups[key]) groups[key] = []
-    groups[key].push(fixture)
-    return groups
-  }, {})
-  const sortedDates = Object.keys(fixturesByDate).sort()
+  // ── Format week label ──
+  const weekLabel = (() => {
+    const { saturday } = getWeekDates(weekOffset)
+    const d = parseISO(saturday)
+    if (weekOffset === 0) return 'This Weekend'
+    if (weekOffset === 1) return 'Next Weekend'
+    if (weekOffset === -1) return 'Last Weekend'
+    return `w/c ${format(d, 'd MMM yyyy')}`
+  })()
 
   return (
     <AppShell>
@@ -295,18 +319,57 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Fixtures section header ── */}
-        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* ── Fixtures section header + week navigator ── */}
+        <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
           <div>
             <div className="section-label">Your Fixtures</div>
             <div className="section-title" style={{ fontSize: '28px' }}>Set Availability</div>
           </div>
-          {(isCaptain() || isAdmin()) && (
-            <button className="btn btn--secondary" style={{ fontSize: '13px' }}
-              onClick={() => navigate('/captain/fixtures')}>
-              + Add Fixture
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Week navigator */}
+            <button
+              onClick={() => setWeekOffset(w => w - 1)}
+              style={{
+                padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--navy-border)',
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: '13px', cursor: 'pointer', transition: 'var(--transition)',
+              }}
+            >
+              ← Prev
             </button>
-          )}
+            <div style={{
+              padding: '7px 18px', borderRadius: 'var(--radius-full)',
+              background: weekOffset === 0 ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.04)',
+              border: weekOffset === 0 ? '1px solid rgba(245,197,24,0.3)' : '1px solid var(--navy-border)',
+              color: weekOffset === 0 ? 'var(--gold)' : 'var(--text-muted)',
+              fontSize: '13px', fontWeight: 700, minWidth: '140px', textAlign: 'center',
+              cursor: weekOffset !== 0 ? 'pointer' : 'default',
+              letterSpacing: '0.3px',
+            }}
+              onClick={() => setWeekOffset(0)}
+              title="Jump to current week"
+            >
+              {weekLabel}
+            </div>
+            <button
+              onClick={() => setWeekOffset(w => w + 1)}
+              style={{
+                padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--navy-border)',
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: '13px', cursor: 'pointer', transition: 'var(--transition)',
+              }}
+            >
+              Next →
+            </button>
+            {(isCaptain() || isAdmin()) && (
+              <button className="btn btn--secondary" style={{ fontSize: '13px', marginLeft: '8px' }}
+                onClick={() => navigate('/captain/fixtures')}>
+                + Add Fixture
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Loading state */}
@@ -340,280 +403,326 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Fixtures grouped by date ── */}
-        {!loading && fixtures.length > 0 && (
+        {/* ── Saturday fixtures ── */}
+        {!loading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-            {sortedDates.map(date => {
-              const group     = fixturesByDate[date]
-              const parsedDate = parseISO(date)
-              const isWeekendGroup = isThisWeek(parsedDate)
-              const isSunday  = parsedDate.getDay() === 0
-              const colCount  = Math.min(group.length, 4)
 
-              return (
-                <div key={date}>
-                  {/* Date group header — gold for Saturday, blue for Sunday */}
-                  {(() => {
-                    const isSundayGroup = parsedDate.getDay() === 0
-                    const accentColor   = isSundayGroup ? '#60A5FA' : 'var(--gold)'
-                    const accentBg      = isSundayGroup ? 'rgba(96,165,250,0.08)' : 'rgba(245,197,24,0.08)'
-                    const accentBorder  = isSundayGroup ? 'rgba(96,165,250,0.25)' : 'rgba(245,197,24,0.25)'
-                    const dayLabel      = isSundayGroup ? '☀️ SUNDAY' : '🏏 SATURDAY'
+            {/* ── Saturday group ── */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontSize: '13px', letterSpacing: '2px',
+                  color: 'var(--gold)', padding: '4px 16px',
+                  background: 'rgba(245,197,24,0.08)',
+                  border: '1px solid rgba(245,197,24,0.25)',
+                  borderRadius: 'var(--radius-full)',
+                }}>
+                  🏏 {format(parseISO(satDate), 'EEEE d MMMM yyyy').toUpperCase()}
+                </div>
+                {weekOffset === 0 && (
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                    color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
+                    border: '1px solid rgba(34,197,94,0.2)',
+                    padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                  }}>THIS WEEKEND</div>
+                )}
+                <div style={{ flex: 1, height: '1px', background: 'rgba(245,197,24,0.15)' }} />
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {satFixtures.length} fixture{satFixtures.length !== 1 ? 's' : ''}
+                </div>
+              </div>
 
+              {satFixtures.length === 0 ? (
+                <div className="card" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+                  No Saturday fixtures scheduled for this week
+                </div>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: satFixtures.length === 4
+                    ? 'repeat(2, minmax(0, 1fr))'
+                    : `repeat(${Math.min(satFixtures.length, 3)}, minmax(0, 1fr))`,
+                  gap: '16px',
+                }}>
+                  {satFixtures.map(fixture => {
+                    const myStatus  = availability[fixture.id] || null
+                    const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
+                    const total     = counts.available + counts.unavailable + counts.tentative
+                    const isLoading = submitting === fixture.id
+                    const matchDate = parseISO(fixture.match_date)
                     return (
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: '14px',
-                        marginBottom: '16px',
-                      }}>
-                        {/* Day type pill */}
+                      <div key={fixture.id} className="card card--hoverable"
+                        onClick={() => navigate('/fixture/' + fixture.id)}
+                        style={{ overflow: 'hidden', opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+                      >
+                        {/* Card top — gold */}
                         <div style={{
-                          fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
-                          color: accentColor,
-                          background: accentBg,
-                          border: `1px solid ${accentBorder}`,
-                          padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                          background: 'linear-gradient(135deg, rgba(245,197,24,0.06), var(--navy-mid))',
+                          padding: '14px 18px', borderTop: '3px solid rgba(245,197,24,0.4)',
+                          borderBottom: '1px solid rgba(245,197,24,0.12)',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
                         }}>
-                          {dayLabel}
-                        </div>
-                        {/* Full date pill */}
-                        <div style={{
-                          fontFamily: 'var(--font-display)',
-                          fontSize: '13px', letterSpacing: '2px',
-                          color: accentColor,
-                          padding: '4px 14px',
-                          background: accentBg,
-                          border: `1px solid ${accentBorder}`,
-                          borderRadius: 'var(--radius-full)',
-                        }}>
-                          {format(parsedDate, 'EEEE d MMMM yyyy').toUpperCase()}
-                        </div>
-                        {/* This weekend badge */}
-                        {isWeekendGroup && (
-                          <div style={{
-                            fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
-                            color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
-                            border: '1px solid rgba(34,197,94,0.2)',
-                            padding: '3px 10px', borderRadius: 'var(--radius-full)',
-                          }}>
-                            THIS WEEKEND
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px', color: 'var(--gold)', background: 'rgba(245,197,24,0.12)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(245,197,24,0.3)' }}>
+                              {fixture.teams?.name}
+                            </div>
+                            <div style={{
+                              fontSize: '11px', fontWeight: 700,
+                              color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
+                              background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
+                              border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                              padding: '4px 10px', borderRadius: '6px',
+                            }}>
+                              {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                            </div>
                           </div>
-                        )}
-                        {/* Divider line */}
-                        <div style={{ flex: 1, height: '1px', background: accentBorder }} />
-                        {/* Fixture count */}
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                          {group.length} fixture{group.length > 1 ? 's' : ''}
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
+                          </div>
+                        </div>
+
+                        {/* Card body */}
+                        <div style={{ padding: '18px 20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: 'var(--gold)', letterSpacing: '2px' }}>VS</span>
+                            <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <span>📅</span>{format(matchDate, 'EEE d MMM yyyy').toUpperCase()}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <span>🕐</span>{fixture.match_time?.slice(0, 5) || '12:30'}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '18px' }}>
+                            <span>📍</span>{fixture.venue}
+                          </div>
+                          {total > 0 && (
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden', display: 'flex', marginBottom: '8px' }}>
+                                {counts.available   > 0 && <div style={{ flex: counts.available,   background: 'var(--green)', transition: 'flex 0.5s' }} />}
+                                {counts.tentative   > 0 && <div style={{ flex: counts.tentative,   background: 'var(--amber)', transition: 'flex 0.5s' }} />}
+                                {counts.unavailable > 0 && <div style={{ flex: counts.unavailable, background: 'var(--red)',   transition: 'flex 0.5s' }} />}
+                              </div>
+                              <div style={{ display: 'flex', gap: '14px' }}>
+                                {[
+                                  { count: counts.available,   color: 'var(--green)', label: 'Available' },
+                                  { count: counts.tentative,   color: 'var(--amber)', label: 'Tentative' },
+                                  { count: counts.unavailable, color: 'var(--red)',   label: 'No' },
+                                ].map(c => (
+                                  <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c.color }} />
+                                    <span style={{ color: c.color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.count}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>{c.label}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {['available', 'unavailable', 'tentative'].map(status => {
+                              const cfg = AVAILABILITY_CONFIG[status]
+                              const isActive = myStatus === status
+                              return (
+                                <button key={status} onClick={(e) => setStatus(e, fixture.id, status)} disabled={isLoading} style={{
+                                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                  padding: '10px 6px', borderRadius: 'var(--radius-md)',
+                                  border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
+                                  background: isActive ? cfg.fillColor : 'transparent',
+                                  color: isActive ? cfg.color : 'var(--text-muted)',
+                                  fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                                  cursor: isLoading ? 'not-allowed' : 'pointer', transition: 'var(--transition)',
+                                  boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
+                                }}>
+                                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: isActive ? cfg.color : 'var(--text-faint)', boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none' }} />
+                                  {status === 'available' ? 'Available' : status === 'unavailable' ? 'Unavailable' : 'Tentative'}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {myStatus && (
+                            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: AVAILABILITY_CONFIG[myStatus]?.color, fontWeight: 600 }}>
+                              ✓ You're marked as {myStatus} for this match
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--navy-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button className="btn btn--ghost" style={{ fontSize: '13px', padding: '6px 12px' }}
+                            onClick={(e) => { e.stopPropagation(); navigate('/fixture/' + fixture.id) }}>
+                            View Details →
+                          </button>
+                          {fixture.availability_deadline && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--navy-border)' }}>
+                              Deadline: {format(parseISO(fixture.availability_deadline), 'EEE d MMM')}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
-                  })()}
-
-                  {/* Cards — 4 cards = 2x2, otherwise auto columns */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: colCount === 4
-                      ? 'repeat(2, minmax(0, 1fr))'
-                      : `repeat(${colCount}, minmax(0, 1fr))`,
-                    gap: '16px',
-                  }}>
-                    {group.map(fixture => {
-              const myStatus  = availability[fixture.id] || null
-              const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
-              const total     = counts.available + counts.unavailable + counts.tentative
-              const isLoading = submitting === fixture.id
-              const matchDate = parseISO(fixture.match_date)
-              const isWeekend = isThisWeek(matchDate)
-
-              return (
-                <div
-                  key={fixture.id}
-                  className="card card--hoverable"
-                  onClick={() => navigate('/fixture/' + fixture.id)}
-                  style={{ overflow: 'hidden', opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
-                >
-
-                  {/* Card top */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, rgba(245,197,24,0.06), var(--navy-mid))',
-                    padding: '14px 18px',
-                    borderBottom: '1px solid rgba(245,197,24,0.12)',
-                    borderTop: '3px solid rgba(245,197,24,0.4)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    flexWrap: 'wrap', gap: '8px',
-                  }}>
-                    {/* Left: Team badge + Home/Away badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
-                        fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px',
-                        textTransform: 'uppercase', color: 'var(--gold)',
-                        background: 'rgba(245,197,24,0.12)',
-                        padding: '4px 10px', borderRadius: '6px',
-                        border: '1px solid rgba(245,197,24,0.3)',
-                      }}>
-                        {fixture.teams?.name}
-                      </div>
-                      <div style={{
-                        fontSize: '11px', fontWeight: 700, letterSpacing: '1px',
-                        color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
-                        background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
-                        border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
-                        padding: '4px 10px', borderRadius: '6px',
-                      }}>
-                        {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
-                      </div>
-                    </div>
-                    {/* Right: This week + competition */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {isWeekend && (
-                        <div style={{
-                          fontSize: '10px', color: 'var(--green)',
-                          background: 'rgba(34,197,94,0.1)',
-                          padding: '3px 8px', borderRadius: '4px',
-                          border: '1px solid rgba(34,197,94,0.2)',
-                          fontWeight: 700, letterSpacing: '1px',
-                        }}>
-                          THIS WEEK
-                        </div>
-                      )}
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card body */}
-                  <div style={{ padding: '18px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: 'var(--gold)', letterSpacing: '2px' }}>VS</span>
-                      <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
-                    </div>
-
-                    {/* Date + Time — bold */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        <span>📅</span>
-                        {format(matchDate, 'EEE d MMM yyyy').toUpperCase()}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        <span>🕐</span>
-                        {fixture.match_time?.slice(0, 5) || '12:30'}
-                      </div>
-                    </div>
-                    {/* Venue — slightly lighter */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '18px' }}>
-                      <span>📍</span>
-                      {fixture.venue}
-                    </div>
-
-                    {/* Availability progress bar */}
-                    {total > 0 && (
-                      <div style={{ marginBottom: '16px' }}>
-                        <div style={{
-                          height: '5px', background: 'rgba(255,255,255,0.06)',
-                          borderRadius: '3px', overflow: 'hidden',
-                          display: 'flex', marginBottom: '8px',
-                        }}>
-                          {counts.available   > 0 && <div style={{ flex: counts.available,   background: 'var(--green)', transition: 'flex 0.5s' }} />}
-                          {counts.tentative   > 0 && <div style={{ flex: counts.tentative,   background: 'var(--amber)', transition: 'flex 0.5s' }} />}
-                          {counts.unavailable > 0 && <div style={{ flex: counts.unavailable, background: 'var(--red)',   transition: 'flex 0.5s' }} />}
-                        </div>
-                        <div style={{ display: 'flex', gap: '14px' }}>
-                          {[
-                            { count: counts.available,   color: 'var(--green)', label: 'Available' },
-                            { count: counts.tentative,   color: 'var(--amber)', label: 'Tentative' },
-                            { count: counts.unavailable, color: 'var(--red)',   label: 'No' },
-                          ].map(c => (
-                            <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c.color }} />
-                              <span style={{ color: c.color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.count}</span>
-                              <span style={{ color: 'var(--text-muted)' }}>{c.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Availability pills ── */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {['available', 'unavailable', 'tentative'].map(status => {
-                        const cfg      = AVAILABILITY_CONFIG[status]
-                        const isActive = myStatus === status
-                        return (
-                          <button
-                            key={status}
-                            onClick={(e) => setStatus(e, fixture.id, status)}
-                            disabled={isLoading}
-                            style={{
-                              flex: 1,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                              padding: '10px 6px',
-                              borderRadius: 'var(--radius-md)',
-                              border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
-                              background: isActive ? cfg.fillColor : 'transparent',
-                              color: isActive ? cfg.color : 'var(--text-muted)',
-                              fontSize: '12px', fontWeight: isActive ? 700 : 500,
-                              cursor: isLoading ? 'not-allowed' : 'pointer',
-                              transition: 'var(--transition)',
-                              letterSpacing: '0.3px',
-                              boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
-                            }}
-                          >
-                            <div style={{
-                              width: '9px', height: '9px', borderRadius: '50%',
-                              background: isActive ? cfg.color : 'var(--text-faint)',
-                              boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none',
-                            }} />
-                            {status === 'available' ? 'Available' : status === 'unavailable' ? 'Unavailable' : 'Tentative'}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {myStatus && (
-                      <div style={{
-                        marginTop: '12px', textAlign: 'center',
-                        fontSize: '12px', color: AVAILABILITY_CONFIG[myStatus]?.color,
-                        fontWeight: 600,
-                      }}>
-                        ✓ You're marked as {myStatus} for this match
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card footer */}
-                  <div style={{
-                    padding: '12px 20px',
-                    borderTop: '1px solid var(--navy-border)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <button
-                      className="btn btn--ghost"
-                      style={{ fontSize: '13px', padding: '6px 12px' }}
-                      onClick={(e) => { e.stopPropagation(); navigate('/fixture/' + fixture.id) }}
-                    >
-                      View Details →
-                    </button>
-                    {fixture.availability_deadline && (
-                      <div style={{
-                        fontSize: '11px', color: 'var(--text-muted)',
-                        background: 'rgba(255,255,255,0.04)',
-                        padding: '4px 10px', borderRadius: '6px',
-                        border: '1px solid var(--navy-border)',
-                      }}>
-                        Deadline: {format(parseISO(fixture.availability_deadline), 'EEE d MMM')}
-                      </div>
-                    )}
-                  </div>
+                  })}
                 </div>
-              )
-            })}
+              )}
+            </div>
+
+            {/* ── Sunday group ── */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontSize: '13px', letterSpacing: '2px',
+                  color: '#60A5FA', padding: '4px 16px',
+                  background: 'rgba(96,165,250,0.08)',
+                  border: '1px solid rgba(96,165,250,0.25)',
+                  borderRadius: 'var(--radius-full)',
+                }}>
+                  ☀️ {format(parseISO(sunDate), 'EEEE d MMMM yyyy').toUpperCase()}
+                </div>
+                {weekOffset === 0 && (
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
+                    color: 'var(--green)', background: 'rgba(34,197,94,0.1)',
+                    border: '1px solid rgba(34,197,94,0.2)',
+                    padding: '3px 10px', borderRadius: 'var(--radius-full)',
+                  }}>THIS WEEKEND</div>
+                )}
+                <div style={{ flex: 1, height: '1px', background: 'rgba(96,165,250,0.15)' }} />
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {sunFixtures.length} fixture{sunFixtures.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+
+              {sunFixtures.length === 0 ? (
+                <div className="card" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+                  No Sunday fixture scheduled for this week
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 600px)', gap: '16px' }}>
+                  {sunFixtures.map(fixture => {
+                    const myStatus  = availability[fixture.id] || null
+                    const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
+                    const total     = counts.available + counts.unavailable + counts.tentative
+                    const isLoading = submitting === fixture.id
+                    const matchDate = parseISO(fixture.match_date)
+                    return (
+                      <div key={fixture.id} className="card card--hoverable"
+                        onClick={() => navigate('/fixture/' + fixture.id)}
+                        style={{ overflow: 'hidden', opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+                      >
+                        {/* Card top — blue */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, rgba(96,165,250,0.06), var(--navy-mid))',
+                          padding: '14px 18px', borderTop: '3px solid rgba(96,165,250,0.4)',
+                          borderBottom: '1px solid rgba(96,165,250,0.12)',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px', color: '#60A5FA', background: 'rgba(96,165,250,0.12)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(96,165,250,0.3)' }}>
+                              {fixture.teams?.name}
+                            </div>
+                            <div style={{
+                              fontSize: '11px', fontWeight: 700,
+                              color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
+                              background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
+                              border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                              padding: '4px 10px', borderRadius: '6px',
+                            }}>
+                              {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
+                          </div>
+                        </div>
+
+                        {/* Card body */}
+                        <div style={{ padding: '18px 20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: '#60A5FA', letterSpacing: '2px' }}>VS</span>
+                            <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <span>📅</span>{format(matchDate, 'EEE d MMM yyyy').toUpperCase()}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <span>🕐</span>{fixture.match_time?.slice(0, 5) || '12:30'}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '18px' }}>
+                            <span>📍</span>{fixture.venue}
+                          </div>
+                          {total > 0 && (
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ height: '5px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden', display: 'flex', marginBottom: '8px' }}>
+                                {counts.available   > 0 && <div style={{ flex: counts.available,   background: 'var(--green)', transition: 'flex 0.5s' }} />}
+                                {counts.tentative   > 0 && <div style={{ flex: counts.tentative,   background: 'var(--amber)', transition: 'flex 0.5s' }} />}
+                                {counts.unavailable > 0 && <div style={{ flex: counts.unavailable, background: 'var(--red)',   transition: 'flex 0.5s' }} />}
+                              </div>
+                              <div style={{ display: 'flex', gap: '14px' }}>
+                                {[
+                                  { count: counts.available,   color: 'var(--green)', label: 'Available' },
+                                  { count: counts.tentative,   color: 'var(--amber)', label: 'Tentative' },
+                                  { count: counts.unavailable, color: 'var(--red)',   label: 'No' },
+                                ].map(c => (
+                                  <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c.color }} />
+                                    <span style={{ color: c.color, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.count}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>{c.label}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {['available', 'unavailable', 'tentative'].map(status => {
+                              const cfg = AVAILABILITY_CONFIG[status]
+                              const isActive = myStatus === status
+                              return (
+                                <button key={status} onClick={(e) => setStatus(e, fixture.id, status)} disabled={isLoading} style={{
+                                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                  padding: '10px 6px', borderRadius: 'var(--radius-md)',
+                                  border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
+                                  background: isActive ? cfg.fillColor : 'transparent',
+                                  color: isActive ? cfg.color : 'var(--text-muted)',
+                                  fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                                  cursor: isLoading ? 'not-allowed' : 'pointer', transition: 'var(--transition)',
+                                  boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
+                                }}>
+                                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: isActive ? cfg.color : 'var(--text-faint)', boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none' }} />
+                                  {status === 'available' ? 'Available' : status === 'unavailable' ? 'Unavailable' : 'Tentative'}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {myStatus && (
+                            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: AVAILABILITY_CONFIG[myStatus]?.color, fontWeight: 600 }}>
+                              ✓ You're marked as {myStatus} for this match
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--navy-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button className="btn btn--ghost" style={{ fontSize: '13px', padding: '6px 12px' }}
+                            onClick={(e) => { e.stopPropagation(); navigate('/fixture/' + fixture.id) }}>
+                            View Details →
+                          </button>
+                          {fixture.availability_deadline && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--navy-border)' }}>
+                              Deadline: {format(parseISO(fixture.availability_deadline), 'EEE d MMM')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
-        </div>
-      )
-    })}
-  </div>
-)}
+        )}
 
         {/* ── Join a Team section — only show teams not yet joined ── */}
         {(() => {
