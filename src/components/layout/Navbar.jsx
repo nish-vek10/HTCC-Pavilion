@@ -115,7 +115,7 @@ export default function Navbar() {
             </span>
             <span style={{
               fontFamily: 'var(--font-body)',
-              fontSize: '12px',
+              fontSize: '11px',
               fontWeight: 400,
               letterSpacing: '0.25em',
               color: 'var(--gold)',
