@@ -114,10 +114,11 @@ export default function Navbar() {
               PAVILION
             </span>
             <span style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '12px',
-              letterSpacing: '0.15em',
-              color: 'var(--gold)',
+              fontFamily: 'var(--font-body)',
+              fontSize: '11px',
+              fontWeight: 400,
+              letterSpacing: '0.25em',
+              color: 'var(--text-muted)',
               lineHeight: 1,
             }}>
               HTCC
