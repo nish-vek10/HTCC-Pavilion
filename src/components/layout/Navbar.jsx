@@ -93,12 +93,12 @@ export default function Navbar({ darkMode, setDarkMode }) {
         {/* ── Left: Logo ── */}
         <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <img
-            src="/assets/images/htcc-logo.png"
-            alt="HTCC"
+            src="/assets/icons/pavilion-icon.svg"
+            alt="Pavilion"
             style={{ width: '34px', height: '34px', objectFit: 'contain' }}
           />
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '18px', letterSpacing: '2px', color: 'var(--text-primary)', lineHeight: 1 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', letterSpacing: '3px', color: 'var(--text-primary)', lineHeight: 1 }}>
               {APP_NAME}
             </div>
             <div style={{ fontSize: '9px', color: 'var(--gold)', letterSpacing: '2px', textTransform: 'uppercase' }}>
