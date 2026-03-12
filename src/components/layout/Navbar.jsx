@@ -95,7 +95,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
           <img
             src="/assets/icons/pavilion-icon.svg"
             alt="Pavilion"
-            style={{ width: '34px', height: '34px', objectFit: 'contain' }}
+            style={{ width: '38px', height: '38px', objectFit: 'contain' }}
           />
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', letterSpacing: '3px', color: 'var(--text-primary)', lineHeight: 1 }}>
