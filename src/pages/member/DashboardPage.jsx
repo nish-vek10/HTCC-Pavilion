@@ -484,10 +484,10 @@ export default function DashboardPage() {
 
                         {/* Card body */}
                         <div style={{ padding: '18px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: 'var(--gold)', letterSpacing: '2px' }}>VS</span>
-                            <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '14px' }}>
+                            HTCC{' '}
+                            <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
+                            {' '}{fixture.opponent.toUpperCase()}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
