@@ -335,7 +335,9 @@ export default function AdminFixturesPage() {
                         </div>
 
                         <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>
-                          HTCC <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>VS</span> {fixture.opponent}
+                          HTCC{' '}
+                          <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
+                          {' '}{fixture.opponent.toUpperCase()}
                         </div>
 
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '3px', display: 'flex', gap: '14px' }}>

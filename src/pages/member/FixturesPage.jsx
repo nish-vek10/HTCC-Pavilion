@@ -428,7 +428,7 @@ export default function FixturesPage() {
                               HTCC <span style={{
                                 fontFamily: 'var(--font-display)',
                                 color: 'var(--gold)', letterSpacing: '1px',
-                              }}>VS</span> {fixture.opponent}
+                              }}>VS</span> {fixture.opponent.toUpperCase()}
                             </div>
 
                             {/* Meta */}

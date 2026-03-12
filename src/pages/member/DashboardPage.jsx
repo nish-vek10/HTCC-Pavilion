@@ -638,10 +638,10 @@ export default function DashboardPage() {
 
                         {/* Card body */}
                         <div style={{ padding: '18px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>HTCC</span>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: '18px', color: '#60A5FA', letterSpacing: '2px' }}>VS</span>
-                            <span style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{fixture.opponent}</span>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '14px' }}>
+                            HTCC{' '}
+                            <span style={{ fontFamily: 'var(--font-display)', color: '#60A5FA', letterSpacing: '1px' }}>VS</span>
+                            {' '}{fixture.opponent.toUpperCase()}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -779,15 +779,31 @@ export default function DashboardPage() {
                       background: isPending ? 'rgba(245,197,24,0.03)' : undefined,
                       transition: 'var(--transition)',
                     }}>
-                      {/* Team icon */}
+                      {/* Team icon — HTCC crest circle */}
                       <div style={{
-                        width: '44px', height: '44px', borderRadius: '50%',
-                        background: isPending ? 'rgba(245,197,24,0.1)' : 'rgba(255,255,255,0.04)',
-                        border: isPending ? '1px solid rgba(245,197,24,0.3)' : '1px solid var(--navy-border)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '18px', margin: '0 auto 14px',
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: '#0D1B2A',
+                        border: '2px solid #F5C518',
+                        boxShadow: '0 0 0 3px rgba(245,197,24,0.15)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 14px',
                       }}>
-                        {isWeekend ? '🏏' : '☀️'}
+                        <img
+                          src="/assets/images/htcc-logo.png"
+                          alt="HTCC Crest"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            objectPosition: 'center 20%',
+                            mixBlendMode: 'screen',
+                          }}
+                        />
                       </div>
 
                       {/* Team name */}

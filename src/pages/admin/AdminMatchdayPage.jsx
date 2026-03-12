@@ -361,7 +361,9 @@ export default function AdminMatchdayPage() {
                         </div>
                         {/* Match title */}
                         <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>
-                          HTCC vs {fixture.opponent}
+                          HTCC{' '}
+                          <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
+                          {' '}{fixture.opponent.toUpperCase()}
                         </div>
                         {/* Line 2: Venue */}
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
