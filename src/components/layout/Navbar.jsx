@@ -90,58 +90,39 @@ export default function Navbar() {
         transition: 'var(--transition)',
       }}>
 
-        {/* ── Left: HTCC Club Identity ── */}
-        <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '11px' }}>
-
-          {/* Gold-ringed crest badge — mix-blend-mode:screen knocks out the black PNG background */}
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: '#0D1B2A',
-            border: '2px solid #F5C518',
-            boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
-            overflow: 'hidden',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <img
-              src="/assets/images/htcc-logo.png"
-              alt="HTCC Crest"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                objectPosition: 'center 20%',
-                mixBlendMode: 'screen',
-              }}
-            />
-          </div>
-
-          {/* Club name — two stacked lines */}
+        {/* ── Left: Pavilion app identity ── */}
+        <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img
+            src="/assets/icons/pavilion-icon.svg"
+            alt="Pavilion"
+            style={{
+              width: '38px',
+              height: '38px',
+              objectFit: 'contain',
+              borderRadius: '10px',
+              flexShrink: 0,
+            }}
+          />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{
               fontFamily: 'var(--font-display)',
               fontSize: '18px',
               letterSpacing: '0.1em',
-              color: '#F5C518',
+              color: 'var(--text-primary)',
               lineHeight: 1,
             }}>
-              HARROW TOWN
+              PAVILION
             </span>
             <span style={{
               fontFamily: 'var(--font-display)',
               fontSize: '12px',
               letterSpacing: '0.15em',
-              color: '#8B9BB4',
+              color: 'var(--gold)',
               lineHeight: 1,
             }}>
-              CRICKET CLUB
+              HTCC
             </span>
           </div>
-
         </Link>
 
         {/* ── Centre: Nav links (desktop) ── */}
@@ -177,8 +158,67 @@ export default function Navbar() {
           })}
         </div>
 
-        {/* ── Right: Dark mode + Profile ── */}
+        {/* ── Right: HTCC identity + Profile ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+          {/* HTCC crest + club name — sits left of profile dropdown */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            paddingRight: '12px',
+            borderRight: '1px solid var(--navy-border)',
+          }}>
+
+            {/* Gold-ringed crest badge */}
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              background: '#0D1B2A',
+              border: '2px solid #F5C518',
+              boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
+              overflow: 'hidden',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <img
+                src="/assets/images/htcc-logo.png"
+                alt="HTCC Crest"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'center 20%',
+                  mixBlendMode: 'screen',
+                }}
+              />
+            </div>
+
+            {/* Club name — two stacked lines */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '18px',
+                letterSpacing: '0.1em',
+                color: '#F5C518',
+                lineHeight: 1,
+              }}>
+                HARROW TOWN
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '12px',
+                letterSpacing: '0.15em',
+                color: '#8B9BB4',
+                lineHeight: 1,
+              }}>
+                CRICKET CLUB
+              </span>
+            </div>
+          </div>
 
           {/* Profile dropdown */}
           <div ref={dropdownRef} style={{ position: 'relative' }}>
