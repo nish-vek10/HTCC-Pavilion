@@ -115,10 +115,10 @@ export default function Navbar() {
             </span>
             <span style={{
               fontFamily: 'var(--font-body)',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 400,
               letterSpacing: '0.25em',
-              color: 'var(--text-muted)',
+              color: 'var(--gold)',
               lineHeight: 1,
             }}>
               HTCC
