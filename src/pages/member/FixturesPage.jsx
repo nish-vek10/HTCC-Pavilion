@@ -370,8 +370,9 @@ export default function FixturesPage() {
 
                           {/* Match info */}
                           <div style={{ flex: 1, minWidth: '180px' }}>
-                            {/* Tags row */}
+                            {/* Tags row — order: Team · Home/Away · Match Type */}
                             <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                              {/* Team badge */}
                               <span style={{
                                 fontSize: '10px', fontWeight: 700, letterSpacing: '1px',
                                 color: 'var(--gold)', background: 'rgba(245,197,24,0.1)',
@@ -380,6 +381,17 @@ export default function FixturesPage() {
                               }}>
                                 {fixture.teams?.name}
                               </span>
+                              {/* Home/Away badge — standard */}
+                              <span style={{
+                                fontSize: '10px', fontWeight: 700,
+                                color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
+                                background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
+                                border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                                padding: '2px 8px', borderRadius: '4px',
+                              }}>
+                                {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                              </span>
+                              {/* Match type badge */}
                               <span style={{
                                 fontSize: '10px', color: 'var(--text-muted)',
                                 background: 'rgba(255,255,255,0.04)',
@@ -387,15 +399,6 @@ export default function FixturesPage() {
                                 border: '1px solid rgba(255,255,255,0.06)',
                               }}>
                                 {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
-                              </span>
-                              <span style={{
-                                fontSize: '10px', fontWeight: 600,
-                                color: hw.color,
-                                background: hw.color + '11',
-                                padding: '2px 8px', borderRadius: '4px',
-                                border: '1px solid ' + hw.color + '33',
-                              }}>
-                                {hw.icon} {hw.label}
                               </span>
                               {isPublished && (
                                 <span style={{
