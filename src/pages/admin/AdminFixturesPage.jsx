@@ -33,6 +33,7 @@ export default function AdminFixturesPage() {
   const [editingId,   setEditingId]   = useState(null)
   const [submitting,  setSubmitting]  = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, fixtureId: null, opponent: '' })
+  const [reminding,   setReminding]   = useState(null)  // fixtureId currently sending reminder
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_FIXTURES }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -122,6 +123,26 @@ export default function AdminFixturesPage() {
     if (error) { toast.error('Failed to delete fixture'); return }
     toast.success('Fixture vs ' + opponent + ' deleted')
     setFixtures(prev => prev.filter(f => f.id !== fixtureId))
+  }
+
+  // ── Send availability reminder to non-responders ──
+  const handleSendReminder = async (fixture) => {
+    setReminding(fixture.id)
+    try {
+      const { data, error } = await supabase.rpc('send_fixture_reminder', {
+        p_fixture_id: fixture.id,
+      })
+      if (error) throw error
+      if (data === 0) {
+        toast('All players have already responded', { icon: '✅' })
+      } else {
+        toast.success(`Reminder sent to ${data} player${data !== 1 ? 's' : ''}`)
+      }
+    } catch (err) {
+      toast.error('Failed to send reminder: ' + err.message)
+    } finally {
+      setReminding(null)
+    }
   }
 
   // ── Group by month ──
@@ -364,15 +385,33 @@ export default function AdminFixturesPage() {
                       {/* Actions */}
                       <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                         <button
-                          onClick={() => navigate('/captain/fixtures/' + fixture.id + '/squad')}
-                          className="btn btn--primary"
-                          style={{ fontSize: '13px', padding: '7px 14px' }}
-                        >
-                          {isPublished ? '👁 View Squad' : '🏏 Select Squad'}
-                        </button>
+                        onClick={() => navigate('/captain/fixtures/' + fixture.id + '/squad')}
+                        className="btn btn--primary"
+                        style={{ fontSize: '13px', padding: '7px 14px' }}
+                      >
+                        {isPublished ? '👁 View Squad' : '🏏 Select Squad'}
+                      </button>
 
+                      {/* Reminder — upcoming fixtures only */}
+                      {new Date(fixture.match_date) >= new Date(new Date().toDateString()) && (
                         <button
-                          onClick={() => handleEdit(fixture)}
+                          onClick={() => handleSendReminder(fixture)}
+                          disabled={reminding === fixture.id}
+                          style={{
+                            padding: '7px 14px', borderRadius: 'var(--radius-md)',
+                            background: 'rgba(96,165,250,0.08)',
+                            border: '1px solid rgba(96,165,250,0.25)',
+                            color: '#60A5FA', fontSize: '13px', fontWeight: 600,
+                            cursor: reminding === fixture.id ? 'not-allowed' : 'pointer',
+                            transition: 'var(--transition)', opacity: reminding === fixture.id ? 0.6 : 1,
+                          }}
+                        >
+                          {reminding === fixture.id ? 'Sending…' : '🔔 Remind'}
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleEdit(fixture)}
                           style={{
                             padding: '7px 14px', borderRadius: 'var(--radius-md)',
                             background: isEditing ? 'rgba(245,197,24,0.15)' : 'rgba(245,197,24,0.08)',

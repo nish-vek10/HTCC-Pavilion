@@ -128,6 +128,7 @@ export const ROUTES = {
   ADMIN_MEMBERS:        '/admin/members',
   ADMIN_FIXTURES:       '/admin/fixtures',
   ADMIN_ANNOUNCEMENTS:  '/admin/announcements',
+  NOTIFICATIONS:        '/notifications',
 }
 
 // ─── Browser tab titles ───────────────────────────

@@ -5,6 +5,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore.js'
 import { APP_NAME, CLUB_SHORT, ROUTES } from '../../lib/constants.js'
+import NotificationBell from './NotificationBell.jsx'
 
 // ─── CONFIGURABLE: Nav links per role ─────────────
 const MEMBER_NAV = [
@@ -220,6 +221,9 @@ export default function Navbar() {
               </span>
             </div>
           </div>
+
+          {/* Notification bell */}
+          <NotificationBell />
 
           {/* Profile dropdown */}
           <div ref={dropdownRef} style={{ position: 'relative' }}>

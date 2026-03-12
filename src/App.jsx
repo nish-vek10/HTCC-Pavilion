@@ -33,7 +33,8 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx'
 import AdminFixturesPage  from './pages/admin/AdminFixturesPage.jsx'
 import AdminMembersPage   from './pages/admin/AdminMembersPage.jsx'
 import AdminMatchdayPage      from './pages/admin/AdminMatchdayPage.jsx'
-import AdminAnnouncementsPage from './pages/admin/AdminAnnouncementsPage.jsx'
+import AdminAnnouncementsPage  from './pages/admin/AdminAnnouncementsPage.jsx'
+import NotificationsPage       from './pages/member/NotificationsPage.jsx'
 
 // ── Constants ──
 import { ROUTES } from './lib/constants.js'
@@ -130,6 +131,11 @@ export default function App() {
         } />
         <Route path="/captain/fixtures/:fixtureId/squad" element={
           <CaptainRoute><SquadSelectionPage /></CaptainRoute>
+        } />
+
+        {/* ── Notifications ── */}
+        <Route path={ROUTES.NOTIFICATIONS} element={
+          <MemberRoute><NotificationsPage /></MemberRoute>
         } />
 
         {/* ── Catch-all ── */}
