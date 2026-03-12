@@ -313,7 +313,9 @@ export default function TeamsPage() {
                                     </div>
                                     {/* Match title */}
                                     <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
-                                      HTCC <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>VS</span> {fixture.opponent}
+                                      HTCC{' '}
+                                      <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
+                                      {' '}{fixture.opponent.toUpperCase()}
                                     </div>
                                     {/* Line 2: Time · Venue */}
                                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
