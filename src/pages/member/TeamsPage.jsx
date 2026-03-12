@@ -215,15 +215,31 @@ export default function TeamsPage() {
                         borderTop: '3px solid rgba(245,197,24,0.5)',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                          {/* Team icon badge */}
+                          {/* Team icon badge — HTCC crest circle */}
                           <div style={{
-                            width: '42px', height: '42px', borderRadius: '10px',
-                            background: 'rgba(245,197,24,0.12)',
-                            border: '1px solid rgba(245,197,24,0.3)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '18px', flexShrink: 0,
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '50%',
+                            background: '#0D1B2A',
+                            border: '2px solid #F5C518',
+                            boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}>
-                            {team.day_type === 'sunday' ? '☀️' : '🏏'}
+                            <img
+                              src="/assets/images/htcc-logo.png"
+                              alt="HTCC Crest"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                objectPosition: 'center 20%',
+                                mixBlendMode: 'screen',
+                              }}
+                            />
                           </div>
                           <div>
                             <div style={{

@@ -16,7 +16,7 @@ const EMPTY_FORM = {
   opponent:   '',
   venue:      '',
   match_date: '',
-  match_time: '13:00',
+  match_time: '12:30',
   match_type: 'league',
   home_away:  'home',
 }
