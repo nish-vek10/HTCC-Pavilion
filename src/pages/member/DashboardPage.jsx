@@ -197,24 +197,41 @@ export default function DashboardPage() {
     }
   }
 
-  // ── Submit / update availability ──
+  // ── Submit / update / unset availability ──
+  // Clicking the already-active status deselects it (deletes the record)
   const setStatus = async (e, fixtureId, status) => {
     e.stopPropagation() // prevent card click navigating
     setSubmitting(fixtureId)
     try {
       const existing = availability[fixtureId]
-      if (existing) {
+
+      if (existing === status) {
+        // ── Toggle off: delete the record ──
+        await supabase
+          .from('availability')
+          .delete()
+          .eq('fixture_id', fixtureId)
+          .eq('player_id', profile.id)
+        setAvailability(prev => {
+          const next = { ...prev }
+          delete next[fixtureId]
+          return next
+        })
+      } else if (existing) {
+        // ── Switch status ──
         await supabase
           .from('availability')
           .update({ status })
           .eq('fixture_id', fixtureId)
           .eq('player_id', profile.id)
+        setAvailability(prev => ({ ...prev, [fixtureId]: status }))
       } else {
+        // ── New response ──
         await supabase
           .from('availability')
           .insert({ fixture_id: fixtureId, player_id: profile.id, status })
+        setAvailability(prev => ({ ...prev, [fixtureId]: status }))
       }
-      setAvailability(prev => ({ ...prev, [fixtureId]: status }))
     } catch (err) {
       console.error('[Dashboard] Failed to set availability:', err)
     } finally {

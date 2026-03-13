@@ -106,21 +106,42 @@ export default function TeamsPage() {
     }
   }
 
-  // ── Set availability ──
+  // ── Set / switch / unset availability ──
+  // Clicking the already-active status deselects it (deletes the record)
   const setStatus = async (fixtureId, status) => {
     try {
       const existing = availability[fixtureId]
-      if (existing) {
-        await supabase.from('availability')
+
+      if (existing === status) {
+        // ── Toggle off: delete the record ──
+        await supabase
+          .from('availability')
+          .delete()
+          .eq('fixture_id', fixtureId)
+          .eq('player_id', profile.id)
+        setAvailability(prev => {
+          const next = { ...prev }
+          delete next[fixtureId]
+          return next
+        })
+        toast('Availability cleared', { icon: '↩️' })
+      } else if (existing) {
+        // ── Switch status ──
+        await supabase
+          .from('availability')
           .update({ status })
           .eq('fixture_id', fixtureId)
           .eq('player_id', profile.id)
+        setAvailability(prev => ({ ...prev, [fixtureId]: status }))
+        toast.success('Availability updated')
       } else {
-        await supabase.from('availability')
+        // ── New response ──
+        await supabase
+          .from('availability')
           .insert({ fixture_id: fixtureId, player_id: profile.id, status })
+        setAvailability(prev => ({ ...prev, [fixtureId]: status }))
+        toast.success('Availability updated')
       }
-      setAvailability(prev => ({ ...prev, [fixtureId]: status }))
-      toast.success('Availability updated')
     } catch (err) {
       toast.error('Failed to update availability')
     }

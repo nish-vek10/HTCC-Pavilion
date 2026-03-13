@@ -68,21 +68,34 @@ export default function FixtureDetailPage() {
     if (data) setMyStatus(data.status)
   }
 
-  // ── Set / update availability ──
+  // ── Set / switch / unset availability ──
+  // Clicking the already-active status deselects it (deletes the record)
   const handleAvailability = async (status) => {
     setSubmitting(true)
     try {
-      const { error } = await supabase
-        .from('availability')
-        .upsert({
-          fixture_id: fixtureId,
-          player_id:  profile.id,
-          status,
-        }, { onConflict: 'fixture_id,player_id' })
-
-      if (error) throw error
-      setMyStatus(status)
-      toast.success('Availability updated')
+      if (myStatus === status) {
+        // ── Toggle off: delete the record ──
+        const { error } = await supabase
+          .from('availability')
+          .delete()
+          .eq('fixture_id', fixtureId)
+          .eq('player_id', profile.id)
+        if (error) throw error
+        setMyStatus(null)
+        toast('Availability cleared', { icon: '↩️' })
+      } else {
+        // ── New or switched response ──
+        const { error } = await supabase
+          .from('availability')
+          .upsert({
+            fixture_id: fixtureId,
+            player_id:  profile.id,
+            status,
+          }, { onConflict: 'fixture_id,player_id' })
+        if (error) throw error
+        setMyStatus(status)
+        toast.success('Availability updated')
+      }
     } catch (err) {
       toast.error('Failed to update: ' + err.message)
     } finally {
