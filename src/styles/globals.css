@@ -733,4 +733,37 @@ body {
   .pending-card {
     padding: 32px 20px !important;
   }
+
+  /* ── Date pill: hide full date on mobile, show compact ── */
+  .date-pill-desktop { display: none !important; }
+  .date-pill-mobile  { display: inline !important; }
+}
+
+/* ─────────────────────────────────────────────────
+   TEAM FIXTURE CAROUSEL
+   Works on both desktop and mobile. On desktop it
+   shows one fixture at a time, navigated by ‹ › arrows.
+───────────────────────────────────────────────── */
+
+/* Hide date-pill-mobile globally (only visible inside mobile media query above) */
+.date-pill-mobile { display: none; }
+
+/* Carousel scroll container */
+.team-fixture-carousel {
+  display:                    flex;
+  overflow-x:                 auto;
+  scroll-snap-type:           x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width:            none;
+  gap:                        0;
+  border-radius:              var(--radius-md);
+}
+.team-fixture-carousel::-webkit-scrollbar { display: none; }
+
+/* Each carousel slide — 100% width so only one shows at a time */
+.team-fixture-carousel-item {
+  flex:              0 0 100%;
+  scroll-snap-align: start;
+  min-width:         0;
+  box-sizing:        border-box;
 }
