@@ -118,7 +118,7 @@ export default function ProfilePage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px' }}>
+      <div className="page-inner" style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Header ── */}
         <div style={{ marginBottom: '36px' }} className="animate-fade-in">

@@ -128,7 +128,7 @@ export default function FixturesPage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
+      <div className="page-inner" style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Header ── */}
         <div style={{ marginBottom: '32px' }}>
@@ -173,7 +173,7 @@ export default function FixturesPage() {
         </div>
 
         {/* ── Filters ── */}
-        <div style={{
+        <div className="filter-scroll-x" style={{
           display: 'flex', flexWrap: 'wrap', gap: '10px',
           marginBottom: '28px', alignItems: 'center',
         }}>

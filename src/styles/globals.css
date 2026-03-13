@@ -471,6 +471,172 @@ body {
    RESPONSIVE UTILITIES
 ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .section-title { font-size: 28px; }
+  .section-title  { font-size: 24px; }
   .page-container { padding: 0 16px; }
+}
+
+/* ─────────────────────────────────────────────────
+   MOBILE — iOS-STYLE RESPONSIVE SYSTEM
+   All desktop layouts untouched.
+   These overrides apply only on screens ≤ 768px.
+───────────────────────────────────────────────── */
+
+/* ── Bottom tab bar: hidden on desktop, flex on mobile ── */
+.bottom-tab-bar { display: none; }
+
+@media (max-width: 768px) {
+
+  /* ── Smooth iOS scrolling globally ── */
+  body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* ── Main content: pad bottom for tab bar + iOS home indicator ── */
+  .app-main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* ── Bottom tab bar: visible on mobile ── */
+  .bottom-tab-bar { display: flex !important; }
+
+  /* ── Page inner wrapper: tighter padding on mobile ── */
+  .page-inner {
+    padding-left:   16px !important;
+    padding-right:  16px !important;
+    padding-top:    20px !important;
+  }
+
+  /* ── Dashboard header: less bottom margin ── */
+  .dashboard-header { margin-bottom: 24px !important; }
+
+  /* ── Stats grid: force 2×2 on mobile ── */
+  .stats-grid-mobile {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* ── Week navigator: stack title above controls ── */
+  .week-nav-wrap {
+    flex-direction: column !important;
+    align-items:    flex-start !important;
+    gap:            12px !important;
+  }
+  .week-nav-controls {
+    width:           100% !important;
+    justify-content: space-between !important;
+  }
+  .week-nav-pill {
+    flex:       1 !important;
+    min-width:  0 !important;
+    text-align: center !important;
+  }
+
+  /* ────────────────────────────────────────────
+     FIXTURE CARD HORIZONTAL SCROLL CAROUSEL
+     Saturday: snap-scroll row; bleeds to screen edge.
+     Each card = 85vw wide so you can peek the next.
+  ──────────────────────────────────────────────*/
+  .fixture-scroll-x {
+    display:                 flex !important;
+    flex-direction:          row !important;
+    overflow-x:              auto !important;
+    scroll-snap-type:        x mandatory !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width:         none !important;
+    gap:                     12px !important;
+    padding-bottom:          6px !important;
+    /* Bleed cards to right screen edge */
+    margin-right:  -16px !important;
+    padding-right:  16px !important;
+  }
+  .fixture-scroll-x::-webkit-scrollbar { display: none; }
+
+  /* Each card in the Saturday carousel */
+  .fixture-scroll-x > * {
+    flex:              0 0 85vw !important;
+    max-width:         340px !important;
+    min-width:         0 !important;
+    scroll-snap-align: start !important;
+    /* iOS card shadow depth */
+    box-shadow:        0 4px 20px rgba(0,0,0,0.3) !important;
+  }
+
+  /* Sunday: single card, full width */
+  .fixture-scroll-sun > * {
+    flex:      0 0 92vw !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Availability buttons: min 44px touch target ── */
+  .avail-row-mobile button {
+    min-height: 44px !important;
+    padding:    10px 4px !important;
+    font-size:  11px !important;
+  }
+  /* Hide dot label on very small screens to save space */
+  @media (max-width: 360px) {
+    .avail-row-mobile button span { display: none !important; }
+  }
+
+  /* ── Fixtures page filter bar: horizontal scroll ── */
+  .filter-scroll-x {
+    flex-wrap:               nowrap !important;
+    overflow-x:              auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width:         none !important;
+    padding-bottom:          4px !important;
+    /* Bleed to edges */
+    margin-right:  -16px !important;
+    padding-right:  16px !important;
+  }
+  .filter-scroll-x::-webkit-scrollbar { display: none; }
+  .filter-scroll-x > * { flex-shrink: 0 !important; }
+
+  /* ── Teams page: stack fixture info above availability pills ── */
+  .team-fixture-row-mobile {
+    flex-direction: column !important;
+    align-items:    flex-start !important;
+    gap:            12px !important;
+  }
+  .team-avail-pills-mobile {
+    width:       100% !important;
+    display:     flex !important;
+    gap:         6px !important;
+    flex-wrap:   wrap !important;
+  }
+  .team-avail-pills-mobile button {
+    flex:        1 1 auto !important;
+    min-height:  44px !important;
+    min-width:   0 !important;
+    padding:     10px 6px !important;
+    font-size:   12px !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+  }
+
+  /* ── Navbar: hide HTCC text identity on mobile (crest + "HARROW TOWN" text) ── */
+  .navbar-htcc-identity { display: none !important; }
+
+  /* ── Navbar: hide hamburger — bottom bar handles nav ── */
+  .nav-mobile-hamburger { display: none !important; }
+
+  /* ── Navbar: hide slide-down menu — bottom bar handles nav ── */
+  .nav-mobile-menu { display: none !important; }
+
+  /* ── Navbar: hide name/role text in profile button ── */
+  .navbar-profile-name { display: none !important; }
+
+  /* ── Card: slightly rounder on mobile ── */
+  .card { border-radius: 16px !important; }
+
+  /* ── Avail pill full-width in fixture detail ── */
+  .avail-detail-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .avail-detail-row button {
+    flex: 1 1 calc(33% - 8px) !important;
+    min-height: 52px !important;
+  }
 }

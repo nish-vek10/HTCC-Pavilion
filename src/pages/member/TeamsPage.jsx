@@ -195,7 +195,7 @@ export default function TeamsPage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
+      <div className="page-inner" style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Header ── */}
         <div style={{ marginBottom: '36px' }} className="animate-fade-in">
@@ -301,7 +301,7 @@ export default function TeamsPage() {
                             {tFixtures.map(fixture => {
                               const myStatus = availability[fixture.id] || null
                               return (
-                                <div key={fixture.id} style={{
+                                <div key={fixture.id} className="team-fixture-row-mobile" style={{
                                   background: 'rgba(255,255,255,0.02)',
                                   border: '1px solid var(--navy-border)',
                                   borderRadius: 'var(--radius-md)',
@@ -352,7 +352,7 @@ export default function TeamsPage() {
                                   </div>
 
                                   {/* Availability pills */}
-                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                  <div className="team-avail-pills-mobile" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                                     {['available', 'unavailable', 'tentative'].map(status => {
                                       const cfg      = AVAILABILITY_CONFIG[status]
                                       const isActive = myStatus === status

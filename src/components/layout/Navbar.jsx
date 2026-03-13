@@ -163,8 +163,8 @@ export default function Navbar() {
         {/* ── Right: HTCC identity + Profile ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 
-          {/* HTCC crest + club name — sits left of profile dropdown */}
-          <div style={{
+          {/* HTCC crest + club name — hidden on mobile via className */}
+          <div className="navbar-htcc-identity" style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
@@ -248,7 +248,7 @@ export default function Navbar() {
               }}>
                 {getInitials(profile?.full_name)}
               </div>
-              <div style={{ textAlign: 'left' }}>
+              <div className="navbar-profile-name" style={{ textAlign: 'left' }}>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                   {profile?.full_name?.split(' ')[0] || 'Member'}
                 </div>
@@ -385,7 +385,7 @@ export default function Navbar() {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMenuOpen(m => !m)}
-            className="nav-mobile"
+            className="nav-mobile nav-mobile-hamburger"
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--text-primary)', fontSize: '22px', padding: '4px',
@@ -403,7 +403,7 @@ export default function Navbar() {
           padding: '12px 16px',
           display: 'flex', flexDirection: 'column', gap: '4px',
           position: 'sticky', top: '64px', zIndex: 99,
-        }} className="nav-mobile">
+        }} className="nav-mobile nav-mobile-menu">
           {navLinks.map(link => (
             <Link key={link.path} to={link.path}
               style={{ textDecoration: 'none' }}

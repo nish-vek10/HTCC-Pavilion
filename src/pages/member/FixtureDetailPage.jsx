@@ -120,7 +120,7 @@ export default function FixtureDetailPage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px' }}>
+      <div className="page-inner" style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Back ── */}
         <button onClick={() => navigate(-1)} style={{
@@ -212,7 +212,7 @@ export default function FixtureDetailPage() {
             My Availability
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="avail-detail-row" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {Object.entries(AVAILABILITY_CONFIG).map(([status, cfg]) => {
               const isActive = myStatus === status
               return (

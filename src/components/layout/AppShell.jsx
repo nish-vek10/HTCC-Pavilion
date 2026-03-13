@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Navbar from './Navbar.jsx'
+import BottomTabBar from './BottomTabBar.jsx'
 
 // ─────────────────────────────────────────────────
 // AppShell wraps all authenticated pages.
@@ -25,9 +26,11 @@ export default function AppShell({ children }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
-      <main style={{ minHeight: 'calc(100vh - 64px)' }}>
+      <main className="app-main" style={{ minHeight: 'calc(100vh - 64px)' }}>
         {children}
       </main>
+      {/* ── Bottom tab bar — mobile only, hidden on desktop via CSS ── */}
+      <BottomTabBar />
     </div>
   )
 }

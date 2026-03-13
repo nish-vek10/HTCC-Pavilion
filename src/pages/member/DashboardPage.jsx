@@ -264,10 +264,10 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+      <div className="page-inner" style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Header ── */}
-        <div style={{ marginBottom: '40px' }} className="animate-fade-in">
+        <div className="animate-fade-in dashboard-header" style={{ marginBottom: '40px' }}>
           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '6px', letterSpacing: '0.5px' }}>
             {greeting()},
           </div>
@@ -286,7 +286,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Quick stats row ── */}
-        <div style={{
+        <div className="stats-grid-mobile" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: '16px', marginBottom: '40px',
@@ -337,12 +337,12 @@ export default function DashboardPage() {
         )}
 
         {/* ── Fixtures section header + week navigator ── */}
-        <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+        <div className="week-nav-wrap" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
           <div>
             <div className="section-label">Your Fixtures</div>
             <div className="section-title" style={{ fontSize: '28px' }}>Set Availability</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="week-nav-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {/* Week navigator */}
             <button
               onClick={() => setWeekOffset(w => w - 1)}
@@ -355,7 +355,7 @@ export default function DashboardPage() {
             >
               ← Prev
             </button>
-            <div style={{
+            <div className="week-nav-pill" style={{
               padding: '7px 18px', borderRadius: 'var(--radius-full)',
               background: weekOffset === 0 ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.04)',
               border: weekOffset === 0 ? '1px solid rgba(245,197,24,0.3)' : '1px solid var(--navy-border)',
@@ -455,7 +455,7 @@ export default function DashboardPage() {
                   No Saturday fixtures scheduled for this week
                 </div>
               ) : (
-                <div style={{
+                <div className="fixture-scroll-x" style={{
                   display: 'grid',
                   gridTemplateColumns: satFixtures.length === 4
                     ? 'repeat(2, minmax(0, 1fr))'
@@ -539,7 +539,7 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div className="avail-row-mobile" style={{ display: 'flex', gap: '8px' }}>
                             {['available', 'unavailable', 'tentative'].map(status => {
                               const cfg = AVAILABILITY_CONFIG[status]
                               const isActive = myStatus === status
@@ -615,7 +615,7 @@ export default function DashboardPage() {
                   No Sunday fixture scheduled for this week
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 600px)', gap: '16px' }}>
+                <div className="fixture-scroll-x fixture-scroll-sun" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 600px)', gap: '16px' }}>
                   {sunFixtures.map(fixture => {
                     const myStatus  = availability[fixture.id] || null
                     const counts    = fixtureCounts[fixture.id] || { available: 0, unavailable: 0, tentative: 0 }
@@ -693,7 +693,7 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div className="avail-row-mobile" style={{ display: 'flex', gap: '8px' }}>
                             {['available', 'unavailable', 'tentative'].map(status => {
                               const cfg = AVAILABILITY_CONFIG[status]
                               const isActive = myStatus === status
