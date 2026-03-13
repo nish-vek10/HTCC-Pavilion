@@ -192,6 +192,9 @@ export default function TeamsPage() {
     }
   }
 
+  // ── Detect touch device: disables hover handlers on mobile to prevent sticky border bug ──
+  const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
+
   // ── Helpers ──
   const isInTeam       = (teamId) => myTeams.some(t => t.id === teamId)
   const hasPendingReq  = (teamId) => joinRequests.some(r => r.team_id === teamId)
@@ -393,8 +396,8 @@ export default function TeamsPage() {
                                                 boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
                                                 whiteSpace: 'nowrap',
                                               }}
-                                              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = cfg.color; e.currentTarget.style.color = cfg.color } }}
-                                              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--navy-border)'; e.currentTarget.style.color = 'var(--text-muted)' } }}
+                                              onMouseEnter={isTouchDevice ? undefined : (e => { if (!isActive) { e.currentTarget.style.borderColor = cfg.color; e.currentTarget.style.color = cfg.color } })}
+                                              onMouseLeave={isTouchDevice ? undefined : (e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--navy-border)'; e.currentTarget.style.color = 'var(--text-muted)' } })}
                                             >
                                               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isActive ? cfg.color : 'var(--text-faint)', boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none', flexShrink: 0 }} />
                                               {cfg.label}
