@@ -46,12 +46,14 @@ export default function LandingPage() {
         {/* ── Right: HTCC crest + club name + action buttons ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
-          {/* Club identity */}
+          {/* Club identity — matches Navbar.jsx exactly */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Gold-ringed HTCC crest */}
+
+            {/* Gold-ringed HTCC crest — same as Navbar */}
             <div style={{
-              width: '38px', height: '38px', borderRadius: '50%',
-              background: '#0D1B2A', border: '2px solid #F5C518',
+              width: '44px', height: '44px', borderRadius: '50%',
+              background: '#0D1B2A',
+              border: '2px solid #F5C518',
               boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
               overflow: 'hidden', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -62,14 +64,23 @@ export default function LandingPage() {
                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
               />
             </div>
-            {/* Club name stacked */}
-            <div style={{ lineHeight: 1 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '2px', color: 'var(--text-primary)' }}>
+
+            {/* Club name — same font sizes and colours as Navbar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '18px', letterSpacing: '0.1em',
+                color: '#F5C518', lineHeight: 1,
+              }}>
                 HARROW TOWN
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '2px', color: 'var(--gold)', marginTop: '1px' }}>
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '12px', letterSpacing: '0.15em',
+                color: '#8B9BB4', lineHeight: 1,
+              }}>
                 CRICKET CLUB
-              </div>
+              </span>
             </div>
           </div>
 

@@ -50,18 +50,18 @@ export default function ClubLoader({ message = 'Loading…', size = 72 }) {
           border:       '1.5px solid rgba(245,197,24,0.12)',
         }} />
 
-        {/* HTCC crest circle */}
+        {/* HTCC crest circle — solid gold ring matching navbar badge */}
         <div style={{
           position:       'absolute',
           inset:          border * 2,
           borderRadius:   '50%',
           background:     '#0D1B2A',
-          border:         '1.5px solid rgba(245,197,24,0.3)',
+          border:         '2px solid #F5C518',
+          boxShadow:      '0 0 0 3px rgba(245,197,24,0.15), 0 2px 12px rgba(0,0,0,0.6)',
           overflow:       'hidden',
           display:        'flex',
           alignItems:     'center',
           justifyContent: 'center',
-          boxShadow:      '0 2px 12px rgba(0,0,0,0.5)',
         }}>
           <img
             src="/assets/images/htcc-logo.png"
