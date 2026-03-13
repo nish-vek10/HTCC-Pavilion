@@ -36,15 +36,21 @@ export default function PendingPage() {
         position: 'relative', zIndex: 2,
       }} className="animate-fade-in">
 
-        {/* Floating icon */}
+        {/* ── HTCC crest with gold ring ── */}
         <div style={{
-          width: '76px', height: '76px', borderRadius: '50%',
-          background: 'rgba(245,197,24,0.1)',
-          border: '2px solid rgba(245,197,24,0.3)',
+          width: '80px', height: '80px', borderRadius: '50%',
+          background: '#0D1B2A',
+          border: '2px solid #F5C518',
+          boxShadow: '0 0 0 5px rgba(245,197,24,0.12), 0 4px 24px rgba(0,0,0,0.6)',
+          overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '34px', margin: '0 auto 28px',
+          margin: '0 auto 28px',
         }} className="animate-float">
-          ⏳
+          <img
+            src="/assets/images/htcc-logo.png"
+            alt="HTCC"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
+          />
         </div>
 
         <div style={{ fontFamily: 'var(--font-display)', fontSize: '30px', letterSpacing: '2px', marginBottom: '12px' }}>

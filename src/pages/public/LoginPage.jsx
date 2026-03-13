@@ -67,13 +67,24 @@ export default function LoginPage() {
 
       <div style={{ width: '100%', maxWidth: '420px', position: 'relative', zIndex: 2 }} className="animate-fade-in">
 
-        {/* Logo + heading */}
+        {/* ── Logo + heading ── */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <img
-            src="/assets/images/htcc-logo.png"
-            alt="HTCC"
-            style={{ width: '72px', height: '72px', objectFit: 'contain', marginBottom: '16px' }}
-          />
+          {/* Gold-ringed HTCC crest */}
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '50%',
+            background: '#0D1B2A',
+            border: '2px solid #F5C518',
+            boxShadow: '0 0 0 5px rgba(245,197,24,0.12), 0 4px 24px rgba(0,0,0,0.6)',
+            overflow: 'hidden',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 20px',
+          }}>
+            <img
+              src="/assets/images/htcc-logo.png"
+              alt="HTCC"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
+            />
+          </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', letterSpacing: '2px' }}>
             {APP_NAME}
           </div>

@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import ConfirmModal from '../../components/ui/ConfirmModal.jsx'
 import { MATCH_TYPE_LABELS, AVAILABILITY_CONFIG } from '../../lib/constants.js'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 
 // ─── CONFIGURABLE ─────────────────────────────────
 const EMPTY_FORM = {
@@ -304,7 +305,9 @@ export default function CaptainFixturesPage() {
 
         {/* ── Fixtures list ── */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>Loading…</div>
+          <div style={{ padding: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ClubLoader message="Loading…" size={64} />
+          </div>
         ) : !selectedTeamId ? (
           <div className="card" style={{ padding: '48px', textAlign: 'center' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>

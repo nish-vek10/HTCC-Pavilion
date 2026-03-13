@@ -17,37 +17,74 @@ export default function LandingPage() {
 
       {/* ── NAV ── */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(13,27,42,0.92)',
+        position:       'sticky', top: 0, zIndex: 100,
+        background:     'rgba(13,27,42,0.92)',
         backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--navy-border)',
-        padding: '0 40px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        height: '64px',
+        borderBottom:   '1px solid var(--navy-border)',
+        padding:        '0 40px',
+        display:        'flex', alignItems: 'center', justifyContent: 'space-between',
+        height:         '64px',
       }}>
+
+        {/* ── Left: Pavilion icon + app name ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <img
-            src="/assets/images/htcc-logo.png"
-            alt="HTCC Logo"
-            style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '50%' }}
+            src="/assets/icons/pavilion-icon.svg"
+            alt="Pavilion"
+            style={{ width: '36px', height: '36px', borderRadius: '10px' }}
           />
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', letterSpacing: '2px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', letterSpacing: '2px', lineHeight: 1 }}>
               {APP_NAME}
             </div>
-            <div style={{ fontSize: '9px', color: 'var(--gold)', letterSpacing: '2px', textTransform: 'uppercase', marginTop: '-4px' }}>
+            <div style={{ fontSize: '9px', color: 'var(--gold)', letterSpacing: '2px', textTransform: 'uppercase', marginTop: '2px' }}>
               {CLUB_SHORT}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button className="btn btn--secondary" onClick={() => navigate('/login')}>
-            Sign In
-          </button>
-          <button className="btn btn--primary" onClick={() => navigate('/signup')}>
-            Join the Club
-          </button>
+        {/* ── Right: HTCC crest + club name + action buttons ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+
+          {/* Club identity */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Gold-ringed HTCC crest */}
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '50%',
+              background: '#0D1B2A', border: '2px solid #F5C518',
+              boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
+              overflow: 'hidden', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <img
+                src="/assets/images/htcc-logo.png"
+                alt="HTCC Crest"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
+              />
+            </div>
+            {/* Club name stacked */}
+            <div style={{ lineHeight: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '2px', color: 'var(--text-primary)' }}>
+                HARROW TOWN
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '11px', letterSpacing: '2px', color: 'var(--gold)', marginTop: '1px' }}>
+                CRICKET CLUB
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: '1px', height: '28px', background: 'var(--navy-border)' }} />
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button className="btn btn--secondary" onClick={() => navigate('/login')}>
+              Sign In
+            </button>
+            <button className="btn btn--primary" onClick={() => navigate('/signup')}>
+              Join the Club
+            </button>
+          </div>
         </div>
       </nav>
 

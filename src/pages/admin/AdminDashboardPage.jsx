@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { PAGE_TITLES, MATCH_TYPE_LABELS, ROUTES } from '../../lib/constants.js'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 
 // ─── Audience badge meta ───────────────────────────
 const AUDIENCE_META = {
@@ -249,7 +250,9 @@ export default function AdminDashboardPage() {
             </div>
 
             {loading ? (
-              <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+              <div className="card" style={{ padding: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ClubLoader message="Loading…" size={48} />
+              </div>
             ) : pending.length === 0 && joinRequests.length === 0 ? (
               <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
                 <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
@@ -395,7 +398,9 @@ export default function AdminDashboardPage() {
             </div>
 
             {loading ? (
-              <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
+              <div className="card" style={{ padding: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ClubLoader message="Loading…" size={48} />
+              </div>
             ) : fixtures.length === 0 ? (
               <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
                 <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
@@ -503,8 +508,8 @@ export default function AdminDashboardPage() {
           </div>
 
           {loading ? (
-            <div className="card" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Loading…
+            <div className="card" style={{ padding: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ClubLoader message="Loading…" size={48} />
             </div>
           ) : announcements.length === 0 ? (
             <div className="card" style={{
