@@ -639,4 +639,82 @@ body {
     flex: 1 1 calc(33% - 8px) !important;
     min-height: 52px !important;
   }
+
+  /* ─── LANDING PAGE ─────────────────────────────── */
+
+  /* Nav: tighter padding on mobile */
+  .landing-nav {
+    padding: 0 16px !important;
+    height: 56px !important;
+  }
+  /* Hide HTCC crest + club name text in landing nav */
+  .landing-nav-htcc     { display: none !important; }
+  /* Hide divider between identity and buttons */
+  .landing-nav-divider  { display: none !important; }
+  /* Compact nav buttons */
+  .landing-nav-buttons  { gap: 8px !important; }
+  .landing-nav-buttons .btn {
+    padding:   8px 14px !important;
+    font-size: 12px !important;
+  }
+
+  /* Hero: strip massive padding, natural height */
+  .landing-hero {
+    padding:    40px 16px 48px !important;
+    min-height: auto !important;
+  }
+
+  /* Hero CTA buttons: stack full-width */
+  .landing-hero-btns {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .landing-hero-btns .btn {
+    width:          100% !important;
+    justify-content: center !important;
+    font-size:      15px !important;
+    padding:        14px 24px !important;
+  }
+
+  /* Stats row: 2×2 grid instead of single row */
+  .landing-stats-row {
+    display:         grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap:             20px 32px !important;
+    margin-top:      40px !important;
+    padding-top:     28px !important;
+  }
+
+  /* Features section: tighter padding */
+  .landing-features { padding: 48px 16px !important; }
+
+  /* CTA section */
+  .landing-cta { padding: 48px 16px !important; }
+  .landing-cta-title {
+    font-size:     clamp(32px, 8vw, 48px) !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* Footer: stack vertically, center-aligned */
+  .landing-footer {
+    padding:        20px 16px !important;
+    flex-direction: column !important;
+    text-align:     center !important;
+    gap:            8px !important;
+  }
+
+  /* ─── AUTH PAGES (Login / Signup / Pending) ───── */
+
+  /* Outer wrapper: remove excess vertical padding */
+  .auth-page-wrapper {
+    padding:     20px 16px !important;
+    align-items: flex-start !important;
+  }
+  /* Card inside auth pages: tighter padding */
+  .auth-page-wrapper .card { padding: 24px !important; }
+
+  /* Pending page card */
+  .pending-card {
+    padding: 32px 20px !important;
+  }
 }

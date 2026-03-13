@@ -12,7 +12,7 @@ export default function PendingPage() {
   }, [])
 
   return (
-    <div style={{
+    <div className="auth-page-wrapper" style={{
       minHeight: '100vh',
       background: 'var(--bg-primary)',
       display: 'flex', flexDirection: 'column',
@@ -26,7 +26,7 @@ export default function PendingPage() {
         background: 'radial-gradient(ellipse 50% 40% at 50% 30%, rgba(245,197,24,0.06) 0%, transparent 70%)',
       }} />
 
-      <div style={{
+      <div className="animate-fade-in pending-card" style={{
         width: '100%', maxWidth: '460px',
         background: 'var(--bg-surface)',
         border: '1px solid rgba(245,197,24,0.2)',
@@ -34,7 +34,7 @@ export default function PendingPage() {
         padding: '48px 40px',
         textAlign: 'center',
         position: 'relative', zIndex: 2,
-      }} className="animate-fade-in">
+      }}>
 
         {/* ── HTCC crest with gold ring ── */}
         <div style={{

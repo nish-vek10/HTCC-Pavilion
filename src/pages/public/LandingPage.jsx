@@ -16,7 +16,7 @@ export default function LandingPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>
 
       {/* ── NAV ── */}
-      <nav style={{
+      <nav className="landing-nav" style={{
         position:       'sticky', top: 0, zIndex: 100,
         background:     'rgba(13,27,42,0.92)',
         backdropFilter: 'blur(16px)',
@@ -46,8 +46,8 @@ export default function LandingPage() {
         {/* ── Right: HTCC crest + club name + action buttons ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
-          {/* Club identity — matches Navbar.jsx exactly */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Club identity — matches Navbar.jsx exactly, hidden on mobile */}
+          <div className="landing-nav-htcc" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 
             {/* Gold-ringed HTCC crest — same as Navbar */}
             <div style={{
@@ -84,11 +84,11 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Divider */}
-          <div style={{ width: '1px', height: '28px', background: 'var(--navy-border)' }} />
+          {/* Divider — hidden on mobile with HTCC identity */}
+          <div className="landing-nav-divider" style={{ width: '1px', height: '28px', background: 'var(--navy-border)' }} />
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div className="landing-nav-buttons" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button className="btn btn--secondary" onClick={() => navigate('/login')}>
               Sign In
             </button>
@@ -100,7 +100,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section style={{
+      <section className="landing-hero" style={{
         minHeight: '88vh',
         display: 'flex', alignItems: 'center',
         padding: '80px',
@@ -151,7 +151,7 @@ export default function LandingPage() {
             track selections, and know your squad — before matchday.
           </p>
 
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+          <div className="landing-hero-btns" style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
             <button className="btn btn--primary" style={{ fontSize: '15px', padding: '14px 32px' }}
               onClick={() => navigate('/signup')}>
               Join HTCC →
@@ -163,7 +163,7 @@ export default function LandingPage() {
           </div>
 
           {/* Stats row */}
-          <div style={{
+          <div className="landing-stats-row" style={{
             display: 'flex', gap: '40px',
             marginTop: '60px', paddingTop: '40px',
             borderTop: '1px solid var(--navy-border)',
@@ -188,7 +188,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section style={{ padding: '80px', borderTop: '1px solid var(--navy-border)' }}>
+      <section className="landing-features" style={{ padding: '80px', borderTop: '1px solid var(--navy-border)' }}>
         <div style={{ textAlign: 'center', marginBottom: '56px' }}>
           <div className="section-label">Built for HTCC</div>
           <div className="section-title">Everything your club needs</div>
@@ -213,12 +213,12 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA FOOTER ── */}
-      <section style={{
+      <section className="landing-cta" style={{
         padding: '80px', textAlign: 'center',
         borderTop: '1px solid var(--navy-border)',
         background: 'var(--bg-surface)',
       }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '48px', letterSpacing: '2px', marginBottom: '16px' }}>
+        <div className="landing-cta-title" style={{ fontFamily: 'var(--font-display)', fontSize: '48px', letterSpacing: '2px', marginBottom: '16px' }}>
           READY TO <span style={{ color: 'var(--gold)' }}>PLAY?</span>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '16px', marginBottom: '32px' }}>
@@ -231,7 +231,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{
+      <footer className="landing-footer" style={{
         padding: '32px 80px',
         borderTop: '1px solid var(--navy-border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',

@@ -77,7 +77,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div style={{
+    <div className="auth-page-wrapper" style={{
       minHeight: '100vh',
       background: 'var(--bg-primary)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
