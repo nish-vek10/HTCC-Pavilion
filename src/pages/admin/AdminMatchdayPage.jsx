@@ -13,8 +13,8 @@ import { AVAILABILITY_CONFIG } from '../../lib/constants.js'
 const SATURDAY_TEAMS = ['1st XI', '2nd XI', '3rd XI', '4th XI']
 const SUNDAY_TEAMS   = ['Sunday XI']
 const TABS           = [
-  { key: 'saturday', label: '🏏 Saturday XIs' },
-  { key: 'sunday',   label: '☀️ Sunday XI'    },
+  { key: 'saturday', label: 'SATURDAY XIs' },
+  { key: 'sunday',   label: 'SUNDAY XI'    },
 ]
 
 // ─── Availability dot colours ─────────────────────
@@ -289,7 +289,7 @@ export default function AdminMatchdayPage() {
               NO FIXTURES ON THIS DATE
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>
-              {activeTab === 'saturday' ? 'No Saturday XI fixtures' : 'No Sunday XI fixture'} scheduled for {formattedDate}
+              {activeTab === 'saturday' ? 'No SATURDAY XI fixtures' : 'No SUNDAY XI fixture'} scheduled for {formattedDate}
             </div>
             <button
               className="btn btn--primary"
