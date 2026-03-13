@@ -219,7 +219,26 @@ export default function AdminDashboardPage() {
                 }}>
                   {loading ? '—' : stat.value}
                 </div>
-                <span style={{ fontSize: '24px', opacity: 0.6 }}>{stat.icon}</span>
+
+                {/* ── Active Teams: HTCC crest badge; others: emoji ── */}
+                {stat.label === 'Active Teams' ? (
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    background: '#0D1B2A',
+                    border: '2px solid #F5C518',
+                    boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
+                    overflow: 'hidden', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <img
+                      src="/assets/images/htcc-logo.png"
+                      alt="HTCC"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
+                    />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '24px', opacity: 0.6 }}>{stat.icon}</span>
+                )}
               </div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '8px' }}>
                 {stat.label}
