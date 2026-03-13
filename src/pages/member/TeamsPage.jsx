@@ -1,6 +1,6 @@
 // pavilion-web/src/pages/member/TeamsPage.jsx
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -23,6 +23,10 @@ export default function TeamsPage() {
 
   // ── Join request modal ──
   const [joinModal, setJoinModal] = useState({ open: false, team: null })
+
+  // ── Fixture carousel state: tracks active slide index per team ──
+  const [carouselIdx, setCarouselIdx] = useState({})   // { teamId: number }
+  const carouselRefs = useRef({})                        // { teamId: DOM ref }
 
   useEffect(() => { document.title = PAGE_TITLES.TEAMS }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -193,6 +197,22 @@ export default function TeamsPage() {
   const hasPendingReq  = (teamId) => joinRequests.some(r => r.team_id === teamId)
   const teamFixtures   = (teamId) => fixtures.filter(f => f.team_id === teamId)
 
+  // ── Carousel: scroll to specific slide index ──
+  const scrollToCarousel = (teamId, idx) => {
+    const el = carouselRefs.current[teamId]
+    if (!el) return
+    el.scrollTo({ left: el.offsetWidth * idx, behavior: 'smooth' })
+    setCarouselIdx(prev => ({ ...prev, [teamId]: idx }))
+  }
+
+  // ── Carousel: update active dot on user swipe ──
+  const handleCarouselScroll = (teamId, total) => {
+    const el = carouselRefs.current[teamId]
+    if (!el) return
+    const idx = Math.round(el.scrollLeft / el.offsetWidth)
+    setCarouselIdx(prev => ({ ...prev, [teamId]: Math.min(Math.max(idx, 0), total - 1) }))
+  }
+
   return (
     <AppShell>
       <div className="page-inner" style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
@@ -297,108 +317,146 @@ export default function TeamsPage() {
                             No upcoming fixtures scheduled for this team.
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {tFixtures.map(fixture => {
-                              const myStatus = availability[fixture.id] || null
-                              return (
-                                <div key={fixture.id} className="team-fixture-row-mobile" style={{
-                                  background: 'rgba(255,255,255,0.02)',
-                                  border: '1px solid var(--navy-border)',
-                                  borderRadius: 'var(--radius-md)',
-                                  padding: '14px 18px',
-                                  display: 'flex', alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  gap: '16px', flexWrap: 'wrap',
-                                }}>
-                                  {/* Date + opponent */}
-                                  <div style={{ flex: 1, minWidth: '180px' }}>
-                                    {/* Line 1: Date · Home/Away · Match Type */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                                      {/* Date */}
-                                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
-                                        {format(parseISO(fixture.match_date), 'd MMMM yy').toUpperCase()}
-                                      </span>
-                                      {/* Home/Away badge — standard */}
-                                      <span style={{
-                                        fontSize: '11px', fontWeight: 700,
-                                        color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
-                                        background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
-                                        border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
-                                        padding: '2px 7px', borderRadius: '4px',
-                                      }}>
-                                        {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
-                                      </span>
-                                      {/* Match type badge */}
-                                      <span style={{
-                                        fontSize: '11px', color: 'var(--text-muted)',
-                                        background: 'rgba(255,255,255,0.04)',
-                                        padding: '2px 7px', borderRadius: '4px',
-                                        border: '1px solid rgba(255,255,255,0.06)',
-                                      }}>
-                                        {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
-                                      </span>
-                                    </div>
-                                    {/* Match title */}
-                                    <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
-                                      HTCC{' '}
-                                      <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
-                                      {' '}{fixture.opponent.toUpperCase()}
-                                    </div>
-                                    {/* Line 2: Time · Venue */}
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                                      <span>🕐 {fixture.match_time?.slice(0, 5)}</span>
-                                      <span>📍 {fixture.venue}</span>
-                                    </div>
-                                  </div>
+                          <div>
+                            {/* ── Horizontal snap carousel ── */}
+                            <div
+                              ref={el => { carouselRefs.current[team.id] = el }}
+                              className="team-fixture-carousel"
+                              onScroll={() => handleCarouselScroll(team.id, tFixtures.length)}
+                            >
+                              {tFixtures.map(fixture => {
+                                const myStatus = availability[fixture.id] || null
+                                const curIdx   = carouselIdx[team.id] || 0
+                                return (
+                                  <div key={fixture.id} className="team-fixture-carousel-item">
+                                    <div style={{
+                                      background: 'rgba(255,255,255,0.02)',
+                                      border: '1px solid var(--navy-border)',
+                                      borderRadius: 'var(--radius-md)',
+                                      padding: '16px 18px',
+                                    }}>
+                                      {/* ── Header: date + badges ── */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
+                                          {format(parseISO(fixture.match_date), 'd MMMM yy').toUpperCase()}
+                                        </span>
+                                        <span style={{
+                                          fontSize: '11px', fontWeight: 700,
+                                          color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
+                                          background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
+                                          border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                                          padding: '2px 8px', borderRadius: '4px',
+                                        }}>
+                                          {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                                        </span>
+                                        <span style={{
+                                          fontSize: '11px', color: 'var(--text-muted)',
+                                          background: 'rgba(255,255,255,0.04)',
+                                          padding: '2px 8px', borderRadius: '4px',
+                                          border: '1px solid rgba(255,255,255,0.06)',
+                                        }}>
+                                          {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
+                                        </span>
+                                      </div>
 
-                                  {/* Availability pills */}
-                                  <div className="team-avail-pills-mobile" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                                    {['available', 'unavailable', 'tentative'].map(status => {
-                                      const cfg      = AVAILABILITY_CONFIG[status]
-                                      const isActive = myStatus === status
-                                      return (
-                                        <button
-                                          key={status}
-                                          onClick={() => setStatus(fixture.id, status)}
-                                          style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            padding: '8px 14px',
-                                            borderRadius: 'var(--radius-md)',
-                                            border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
-                                            background: isActive ? cfg.fillColor : 'transparent',
-                                            color: isActive ? cfg.color : 'var(--text-muted)',
-                                            fontSize: '12px', fontWeight: isActive ? 700 : 500,
-                                            cursor: 'pointer', transition: 'var(--transition)',
-                                            boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
-                                            whiteSpace: 'nowrap',
-                                          }}
-                                          onMouseEnter={e => {
-                                            if (!isActive) {
-                                              e.currentTarget.style.borderColor = cfg.color
-                                              e.currentTarget.style.color = cfg.color
-                                            }
-                                          }}
-                                          onMouseLeave={e => {
-                                            if (!isActive) {
-                                              e.currentTarget.style.borderColor = 'var(--navy-border)'
-                                              e.currentTarget.style.color = 'var(--text-muted)'
-                                            }
-                                          }}
-                                        >
-                                          <div style={{
-                                            width: '8px', height: '8px', borderRadius: '50%',
-                                            background: isActive ? cfg.color : 'var(--text-faint)',
-                                            boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none',
-                                            flexShrink: 0,
-                                          }} />
-                                          {cfg.label}
-                                        </button>
-                                      )
-                                    })}
+                                      {/* ── Match title ── */}
+                                      <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)', marginBottom: '10px' }}>
+                                        HTCC{' '}
+                                        <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
+                                        {' '}{fixture.opponent.toUpperCase()}
+                                      </div>
+
+                                      {/* ── Time + venue ── */}
+                                      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>🕐 {fixture.match_time?.slice(0, 5)}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>📍 {fixture.venue}</span>
+                                      </div>
+
+                                      {/* ── Availability pills ── */}
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        {['available', 'unavailable', 'tentative'].map(status => {
+                                          const cfg      = AVAILABILITY_CONFIG[status]
+                                          const isActive = myStatus === status
+                                          return (
+                                            <button
+                                              key={status}
+                                              onClick={() => setStatus(fixture.id, status)}
+                                              style={{
+                                                flex: 1,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                                padding: '10px 6px',
+                                                borderRadius: 'var(--radius-md)',
+                                                border: '2px solid ' + (isActive ? cfg.color : 'var(--navy-border)'),
+                                                background: isActive ? cfg.fillColor : 'transparent',
+                                                color: isActive ? cfg.color : 'var(--text-muted)',
+                                                fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                                                cursor: 'pointer', transition: 'var(--transition)',
+                                                boxShadow: isActive ? '0 0 12px ' + cfg.color + '33' : 'none',
+                                                whiteSpace: 'nowrap',
+                                              }}
+                                              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = cfg.color; e.currentTarget.style.color = cfg.color } }}
+                                              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--navy-border)'; e.currentTarget.style.color = 'var(--text-muted)' } }}
+                                            >
+                                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isActive ? cfg.color : 'var(--text-faint)', boxShadow: isActive ? '0 0 6px ' + cfg.color : 'none', flexShrink: 0 }} />
+                                              {cfg.label}
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              )
-                            })}
+                                )
+                              })}
+                            </div>
+
+                            {/* ── Navigation dots + prev/next ── */}
+                            {tFixtures.length > 1 && (
+                              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginTop: '14px' }}>
+                                {/* Prev */}
+                                <button
+                                  onClick={() => scrollToCarousel(team.id, Math.max(0, (carouselIdx[team.id] || 0) - 1))}
+                                  disabled={(carouselIdx[team.id] || 0) === 0}
+                                  style={{
+                                    width: '26px', height: '26px', borderRadius: '50%',
+                                    background: 'none',
+                                    border: '1px solid var(--navy-border)',
+                                    color: (carouselIdx[team.id] || 0) === 0 ? 'var(--text-faint)' : 'var(--text-muted)',
+                                    fontSize: '14px', cursor: (carouselIdx[team.id] || 0) === 0 ? 'default' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'var(--transition)',
+                                  }}
+                                >‹</button>
+
+                                {/* Dots */}
+                                {tFixtures.map((_, i) => (
+                                  <div
+                                    key={i}
+                                    onClick={() => scrollToCarousel(team.id, i)}
+                                    style={{
+                                      width: (carouselIdx[team.id] || 0) === i ? '20px' : '6px',
+                                      height: '6px', borderRadius: '3px',
+                                      background: (carouselIdx[team.id] || 0) === i ? 'var(--gold)' : 'rgba(255,255,255,0.15)',
+                                      cursor: 'pointer', transition: 'all 0.3s ease',
+                                    }}
+                                  />
+                                ))}
+
+                                {/* Next */}
+                                <button
+                                  onClick={() => scrollToCarousel(team.id, Math.min(tFixtures.length - 1, (carouselIdx[team.id] || 0) + 1))}
+                                  disabled={(carouselIdx[team.id] || 0) === tFixtures.length - 1}
+                                  style={{
+                                    width: '26px', height: '26px', borderRadius: '50%',
+                                    background: 'none',
+                                    border: '1px solid var(--navy-border)',
+                                    color: (carouselIdx[team.id] || 0) === tFixtures.length - 1 ? 'var(--text-faint)' : 'var(--text-muted)',
+                                    fontSize: '14px', cursor: (carouselIdx[team.id] || 0) === tFixtures.length - 1 ? 'default' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    transition: 'var(--transition)',
+                                  }}
+                                >›</button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -434,38 +492,56 @@ export default function TeamsPage() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                {allTeams.map(team => {
+              {(() => {
+                // ── Split teams by day type ──
+                const satTeams = allTeams.filter(t => t.day_type === 'saturday')
+                const sunTeams = allTeams.filter(t => t.day_type === 'sunday')
+
+                // ── Reusable team card ──
+                const renderCard = (team) => {
                   const alreadyIn = isInTeam(team.id)
                   const pending   = hasPendingReq(team.id)
-
                   return (
-                    <div key={team.id} className="card" style={{ padding: '20px', textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '18px', letterSpacing: '1px', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    <div key={team.id} className="card" style={{ padding: '22px 18px', textAlign: 'center' }}>
+
+                      {/* HTCC crest with gold ring */}
+                      <div style={{
+                        width: '48px', height: '48px', borderRadius: '50%',
+                        background: '#0D1B2A', border: '2px solid #F5C518',
+                        boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.5)',
+                        overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        margin: '0 auto 14px',
+                      }}>
+                        <img src="/assets/images/htcc-logo.png" alt="HTCC Crest"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }} />
+                      </div>
+
+                      {/* Team name */}
+                      <div style={{
+                        fontFamily: 'var(--font-display)', fontSize: '17px', letterSpacing: '1px',
+                        color: 'var(--text-primary)', marginBottom: '4px',
+                      }}>
                         {team.name.toUpperCase()}
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', textTransform: 'capitalize' }}>
-                        {team.day_type}
+
+                      {/* Day type */}
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '16px', textTransform: 'capitalize', letterSpacing: '0.5px' }}>
+                        {team.day_type} fixture
                       </div>
 
+                      {/* Action */}
                       {alreadyIn ? (
                         <div style={{
-                          padding: '8px', borderRadius: 'var(--radius-md)',
-                          background: 'rgba(34,197,94,0.08)',
-                          border: '1px solid rgba(34,197,94,0.2)',
+                          padding: '9px 12px', borderRadius: 'var(--radius-md)',
+                          background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
                           fontSize: '12px', color: 'var(--green)', fontWeight: 700,
-                        }}>
-                          ✓ Member
-                        </div>
+                        }}>✓ Member</div>
                       ) : pending ? (
                         <button
-                          className="btn"
                           onClick={() => handleCancelJoinRequest(team.id, team.name)}
                           style={{
-                            width: '100%', padding: '8px',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'rgba(245,197,24,0.06)',
-                            border: '1px solid rgba(245,197,24,0.2)',
+                            width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)',
+                            background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.3)',
                             fontSize: '12px', color: 'var(--amber)', fontWeight: 700,
                             cursor: 'pointer', transition: 'var(--transition)',
                           }}
@@ -476,26 +552,55 @@ export default function TeamsPage() {
                             e.currentTarget.style.color = 'var(--red)'
                           }}
                           onMouseLeave={e => {
-                            e.currentTarget.textContent = '⏳ Pending'
-                            e.currentTarget.style.background = 'rgba(245,197,24,0.06)'
-                            e.currentTarget.style.borderColor = 'rgba(245,197,24,0.2)'
+                            e.currentTarget.textContent = '⏳ Requested'
+                            e.currentTarget.style.background = 'rgba(245,197,24,0.08)'
+                            e.currentTarget.style.borderColor = 'rgba(245,197,24,0.3)'
                             e.currentTarget.style.color = 'var(--amber)'
                           }}
-                        >
-                          ⏳ Pending
-                        </button>
+                        >⏳ Requested</button>
                       ) : (
                         <button
-                          className="btn btn--ghost"
-                          style={{ width: '100%', fontSize: '13px', padding: '8px' }}
-                          onClick={() => setJoinModal({ open: true, team })}>
-                          Request to Join
-                        </button>
+                          onClick={() => setJoinModal({ open: true, team })}
+                          style={{
+                            width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)',
+                            background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)',
+                            fontSize: '12px', color: '#60A5FA', fontWeight: 600,
+                            cursor: 'pointer', transition: 'var(--transition)',
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.16)'
+                            e.currentTarget.style.borderColor = 'rgba(59,130,246,0.5)'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.08)'
+                            e.currentTarget.style.borderColor = 'rgba(59,130,246,0.3)'
+                          }}
+                        >+ Request to Join</button>
                       )}
                     </div>
                   )
-                })}
-              </div>
+                }
+
+                return (
+                  <>
+                    {/* Saturday teams — 2×2 grid */}
+                    {satTeams.length > 0 && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '1fr 1fr',
+                        gap: '14px', marginBottom: sunTeams.length > 0 ? '14px' : '0',
+                      }}>
+                        {satTeams.map(renderCard)}
+                      </div>
+                    )}
+                    {/* Sunday teams — full width below */}
+                    {sunTeams.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+                        {sunTeams.map(renderCard)}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </>
         )}

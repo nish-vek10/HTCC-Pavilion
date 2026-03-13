@@ -37,7 +37,6 @@ export default function Navbar() {
   const isCaptain    = useAuthStore(state => state.isCaptain)
   const isSuperAdmin = useAuthStore(state => state.isSuperAdmin)
 
-  const [menuOpen,    setMenuOpen]    = useState(false)  // Mobile hamburger
   const [profileOpen, setProfileOpen] = useState(false)  // Profile dropdown
   const dropdownRef = useRef(null)
 
@@ -173,7 +172,7 @@ export default function Navbar() {
           }}>
 
             {/* Gold-ringed crest badge */}
-            <div style={{
+            <div className="navbar-htcc-crest" style={{
               width: '44px',
               height: '44px',
               borderRadius: '50%',
@@ -201,7 +200,7 @@ export default function Navbar() {
 
             {/* Club name — two stacked lines */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{
+              <span className="navbar-htcc-text-primary" style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '18px',
                 letterSpacing: '0.1em',
@@ -210,7 +209,7 @@ export default function Navbar() {
               }}>
                 HARROW TOWN
               </span>
-              <span style={{
+              <span className="navbar-htcc-text-secondary" style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '12px',
                 letterSpacing: '0.15em',
@@ -382,44 +381,8 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile hamburger */}
-          <button
-            onClick={() => setMenuOpen(m => !m)}
-            className="nav-mobile nav-mobile-hamburger"
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-primary)', fontSize: '22px', padding: '4px',
-            }}>
-            {menuOpen ? '✕' : '☰'}
-          </button>
         </div>
       </nav>
-
-      {/* ── Mobile slide-down menu ── */}
-      {menuOpen && (
-        <div style={{
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--navy-border)',
-          padding: '12px 16px',
-          display: 'flex', flexDirection: 'column', gap: '4px',
-          position: 'sticky', top: '64px', zIndex: 99,
-        }} className="nav-mobile nav-mobile-menu">
-          {navLinks.map(link => (
-            <Link key={link.path} to={link.path}
-              style={{ textDecoration: 'none' }}
-              onClick={() => setMenuOpen(false)}>
-              <div style={{
-                padding: '12px 16px', borderRadius: 'var(--radius-md)',
-                color: location.pathname === link.path ? 'var(--gold)' : 'var(--text-muted)',
-                background: location.pathname === link.path ? 'rgba(245,197,24,0.08)' : 'transparent',
-                fontSize: '15px', fontWeight: 500,
-              }}>
-                {link.label}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
 
       {/* Desktop/mobile nav visibility styles */}
       <style>{`

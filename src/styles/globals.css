@@ -615,13 +615,29 @@ body {
     white-space: nowrap !important;
   }
 
-  /* ── Navbar: hide HTCC text identity on mobile (crest + "HARROW TOWN" text) ── */
-  .navbar-htcc-identity { display: none !important; }
+  /* ── Navbar: show HTCC identity on mobile but smaller ── */
+  .navbar-htcc-identity {
+    display:       flex !important;
+    border-right:  none !important;
+    padding-right: 4px !important;
+    gap:           7px !important;
+  }
+  .navbar-htcc-crest {
+    width:  30px !important;
+    height: 30px !important;
+  }
+  .navbar-htcc-text-primary {
+    font-size:      13px !important;
+    letter-spacing: 0.08em !important;
+  }
+  .navbar-htcc-text-secondary {
+    font-size: 8px !important;
+  }
 
-  /* ── Navbar: hide hamburger — bottom bar handles nav ── */
+  /* ── Navbar: remove hamburger — profile dropdown + bottom bar handles all nav ── */
   .nav-mobile-hamburger { display: none !important; }
 
-  /* ── Navbar: hide slide-down menu — bottom bar handles nav ── */
+  /* ── Navbar: remove slide-down menu — bottom bar handles nav ── */
   .nav-mobile-menu { display: none !important; }
 
   /* ── Navbar: hide name/role text in profile button ── */

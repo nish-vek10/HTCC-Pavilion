@@ -173,9 +173,10 @@ export default function FixturesPage() {
         </div>
 
         {/* ── Filters ── */}
+        <div style={{ marginBottom: '28px' }}>
         <div className="filter-scroll-x" style={{
-          display: 'flex', flexWrap: 'wrap', gap: '10px',
-          marginBottom: '28px', alignItems: 'center',
+          display: 'flex', flexWrap: 'nowrap', gap: '10px',
+          marginBottom: '8px', alignItems: 'center',
         }}>
 
           {/* Period toggle */}
@@ -265,10 +266,11 @@ export default function FixturesPage() {
             </button>
           )}
 
-          {/* Result count */}
-          <div style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-faint)' }}>
-            {filtered.length} fixture{filtered.length !== 1 ? 's' : ''}
           </div>
+        {/* Result count — outside scroll row so it's always visible */}
+        <div style={{ fontSize: '12px', color: 'var(--text-faint)', textAlign: 'right' }}>
+          {filtered.length} fixture{filtered.length !== 1 ? 's' : ''}
+        </div>
         </div>
 
         {/* ── Fixtures list ── */}

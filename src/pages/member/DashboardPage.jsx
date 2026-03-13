@@ -434,7 +434,8 @@ export default function DashboardPage() {
                   border: '1px solid rgba(245,197,24,0.25)',
                   borderRadius: 'var(--radius-full)',
                 }}>
-                  🏏 {format(parseISO(satDate), 'EEEE d MMMM yyyy').toUpperCase()}
+                  <span className="date-pill-desktop">{format(parseISO(satDate), 'EEEE d MMMM yyyy').toUpperCase()}</span>
+                  <span className="date-pill-mobile">{format(parseISO(satDate), 'EEE d MMM yy').toUpperCase()}</span>
                 </div>
                 {weekOffset === 0 && (
                   <div style={{
@@ -594,7 +595,8 @@ export default function DashboardPage() {
                   border: '1px solid rgba(96,165,250,0.25)',
                   borderRadius: 'var(--radius-full)',
                 }}>
-                  ☀️ {format(parseISO(sunDate), 'EEEE d MMMM yyyy').toUpperCase()}
+                  <span className="date-pill-desktop">{format(parseISO(sunDate), 'EEEE d MMMM yyyy').toUpperCase()}</span>
+                  <span className="date-pill-mobile">{format(parseISO(sunDate), 'EEE d MMM yy').toUpperCase()}</span>
                 </div>
                 {weekOffset === 0 && (
                   <div style={{
