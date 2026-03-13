@@ -1,11 +1,26 @@
 // pavilion-web/src/pages/public/LandingPage.jsx
 
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { APP_NAME, CLUB_NAME, CLUB_SHORT, CLUB_FOUNDED } from '../../lib/constants.js'
 
 export default function LandingPage() {
   const navigate = useNavigate()
+
+  // ── Mobile auth dropdown ──
+  const [authOpen, setAuthOpen] = useState(false)
+  const authDropdownRef = useRef(null)
+
+  // ── Close dropdown when clicking outside ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (authDropdownRef.current && !authDropdownRef.current.contains(e.target)) {
+        setAuthOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // ── Set browser tab title ──
   useEffect(() => {
@@ -43,14 +58,14 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ── Right: HTCC crest + club name + action buttons ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* ── Right: HTCC identity + auth buttons / mobile dropdown ── */}
+        <div ref={authDropdownRef} style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
 
-          {/* Club identity — matches Navbar.jsx exactly, hidden on mobile */}
+          {/* Club identity — shown on desktop always; shown smaller on mobile */}
           <div className="landing-nav-htcc" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 
-            {/* Gold-ringed HTCC crest — same as Navbar */}
-            <div style={{
+            {/* Gold-ringed HTCC crest */}
+            <div className="landing-crest-badge" style={{
               width: '44px', height: '44px', borderRadius: '50%',
               background: '#0D1B2A',
               border: '2px solid #F5C518',
@@ -65,8 +80,8 @@ export default function LandingPage() {
               />
             </div>
 
-            {/* Club name — same font sizes and colours as Navbar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {/* Club name */}
+            <div className="landing-crest-name" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <span style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '18px', letterSpacing: '0.1em',
@@ -87,7 +102,7 @@ export default function LandingPage() {
           {/* Divider — hidden on mobile with HTCC identity */}
           <div className="landing-nav-divider" style={{ width: '1px', height: '28px', background: 'var(--navy-border)' }} />
 
-          {/* Action buttons */}
+          {/* Action buttons — desktop only; hidden on mobile via CSS */}
           <div className="landing-nav-buttons" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button className="btn btn--secondary" onClick={() => navigate('/login')}>
               Sign In
@@ -96,6 +111,107 @@ export default function LandingPage() {
               Join the Club
             </button>
           </div>
+
+          {/* ── Mobile-only dropdown trigger ── */}
+          <button
+            className="landing-auth-trigger"
+            onClick={() => setAuthOpen(o => !o)}
+            style={{
+              display:        'none', // shown via CSS on mobile
+              alignItems:     'center',
+              justifyContent: 'center',
+              width:          '32px',
+              height:         '32px',
+              borderRadius:   'var(--radius-md)',
+              background:     authOpen ? 'rgba(245,197,24,0.12)' : 'rgba(255,255,255,0.06)',
+              border:         authOpen ? '1px solid rgba(245,197,24,0.35)' : '1px solid var(--navy-border)',
+              cursor:         'pointer',
+              transition:     'all 0.2s ease',
+              flexShrink:     0,
+            }}
+            aria-label="Account options"
+          >
+            <span style={{
+              display:    'inline-block',
+              color:      authOpen ? '#F5C518' : 'var(--text-muted)',
+              fontSize:   '10px',
+              lineHeight: 1,
+              transform:  authOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.25s ease, color 0.2s ease',
+            }}>▼</span>
+          </button>
+
+          {/* ── Auth dropdown panel — mobile only ── */}
+          {authOpen && (
+            <div style={{
+              position:       'absolute',
+              top:            'calc(100% + 10px)',
+              right:          0,
+              minWidth:       '210px',
+              background:     'rgba(22,34,54,0.98)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border:         '1px solid rgba(245,197,24,0.2)',
+              borderRadius:   'var(--radius-lg)',
+              padding:        '8px',
+              boxShadow:      '0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(245,197,24,0.06)',
+              animation:      'landing-dropdown-in 0.2s cubic-bezier(0.16,1,0.3,1) forwards',
+              zIndex:         300,
+            }}>
+              <style>{`
+                @keyframes landing-dropdown-in {
+                  from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+                  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+                }
+              `}</style>
+
+              {/* Sign In row */}
+              <button
+                onClick={() => { setAuthOpen(false); navigate('/login') }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'none', border: 'none',
+                  cursor: 'pointer', transition: 'background 0.15s ease',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px', fontWeight: 600,
+                  fontFamily: 'var(--font-body)',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
+              >
+                <span style={{ fontSize: '15px' }}>👤</span>
+                Sign In
+              </button>
+
+              {/* Divider */}
+              <div style={{ height: '1px', background: 'var(--navy-border)', margin: '4px 6px' }} />
+
+              {/* Join the Club row */}
+              <button
+                onClick={() => { setAuthOpen(false); navigate('/signup') }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(245,197,24,0.08)',
+                  border: '1px solid rgba(245,197,24,0.2)',
+                  cursor: 'pointer', transition: 'background 0.15s ease',
+                  color: 'var(--gold)',
+                  fontSize: '14px', fontWeight: 700,
+                  fontFamily: 'var(--font-body)',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.16)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.08)' }}
+              >
+                <span style={{ fontSize: '15px' }}>🏏</span>
+                Join the Club
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 

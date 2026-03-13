@@ -673,16 +673,22 @@ body {
     padding: 0 16px !important;
     height: 56px !important;
   }
-  /* Hide HTCC crest + club name text in landing nav */
-  .landing-nav-htcc     { display: none !important; }
-  /* Hide divider between identity and buttons */
-  .landing-nav-divider  { display: none !important; }
-  /* Compact nav buttons */
-  .landing-nav-buttons  { gap: 8px !important; }
-  .landing-nav-buttons .btn {
-    padding:   8px 14px !important;
-    font-size: 12px !important;
+  /* Show HTCC identity on mobile — scaled down */
+  .landing-nav-htcc       { display: flex !important; gap: 7px !important; }
+  .landing-crest-badge    { width: 30px !important; height: 30px !important; }
+  .landing-crest-name span:first-child {
+    font-size:      11px !important;
+    letter-spacing: 0.06em !important;
   }
+  .landing-crest-name span:last-child {
+    font-size: 7px !important;
+  }
+  /* Hide divider on mobile */
+  .landing-nav-divider  { display: none !important; }
+  /* Hide desktop auth buttons — dropdown handles auth on mobile */
+  .landing-nav-buttons  { display: none !important; }
+  /* Show mobile auth dropdown trigger */
+  .landing-auth-trigger { display: flex !important; }
 
   /* Hero: strip massive padding, natural height */
   .landing-hero {
