@@ -207,7 +207,21 @@ export default function LandingPage() {
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.16)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.08)' }}
               >
-                <span style={{ fontSize: '15px' }}>🏏</span>
+                {/* HTCC crest with gold ring */}
+                <div style={{
+                  width: '22px', height: '22px', borderRadius: '50%',
+                  background: '#0D1B2A',
+                  border: '2px solid #F5C518',
+                  boxShadow: '0 0 0 2px rgba(245,197,24,0.2)',
+                  overflow: 'hidden', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <img
+                    src="/assets/images/htcc-logo.png"
+                    alt="HTCC"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
+                  />
+                </div>
                 Join the Club
               </button>
             </div>

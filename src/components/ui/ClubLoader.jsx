@@ -1,11 +1,13 @@
 // pavilion-web/src/components/ui/ClubLoader.jsx
 
 // ── Shared animated loader used across all loading states ──
-// Displays the HTCC crest inside a spinning gold ring arc
+// Spinning gold arc outside, HTCC crest with solid gold ring inside.
 
 export default function ClubLoader({ message = 'Loading…', size = 72 }) {
-  const ring    = size + 16          // outer spinning ring diameter
-  const border  = Math.max(3, size * 0.045) // ring stroke scales with size
+  // ── CONFIGURABLE: ring stroke scales proportionally with size ──
+  const strokeWidth = Math.max(3, Math.round(size * 0.05))
+  const outerSize   = size + strokeWidth * 4   // total container diameter
+  const crestSize   = size - strokeWidth * 2   // inner crest badge diameter
 
   return (
     <div style={{
@@ -13,55 +15,56 @@ export default function ClubLoader({ message = 'Loading…', size = 72 }) {
       flexDirection:  'column',
       alignItems:     'center',
       justifyContent: 'center',
-      gap:            '20px',
+      gap:            '24px',
     }}>
 
-      {/* ── Spinning ring + crest ── */}
-      <div style={{ position: 'relative', width: ring, height: ring }}>
+      {/* ── Outer container: spinning arc wraps the crest ── */}
+      <div style={{
+        position: 'relative',
+        width:    outerSize,
+        height:   outerSize,
+        display:  'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+      }}>
 
-        {/* Spinning gold arc (CSS animation injected inline) */}
         <style>{`
           @keyframes pavilion-spin {
-            0%   { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
           }
           @keyframes pavilion-pulse {
             0%, 100% { opacity: 1; }
-            50%       { opacity: 0.4; }
+            50%       { opacity: 0.35; }
           }
         `}</style>
 
-        {/* Outer spinning arc */}
+        {/* ── Layer 1: spinning gold arc — outermost ── */}
         <div style={{
           position:     'absolute',
           inset:        0,
           borderRadius: '50%',
-          border:       `${border}px solid transparent`,
+          border:       `${strokeWidth}px solid rgba(245,197,24,0.12)`,
           borderTopColor:   '#F5C518',
-          borderRightColor: 'rgba(245,197,24,0.35)',
+          borderRightColor: 'rgba(245,197,24,0.45)',
           animation:    'pavilion-spin 1.1s linear infinite',
+          zIndex:       2,
         }} />
 
-        {/* Inner static gold ring (background) */}
+        {/* ── Layer 2: HTCC crest with solid gold ring — sits inside arc ── */}
         <div style={{
-          position:     'absolute',
-          inset:        border * 1.5,
-          borderRadius: '50%',
-          border:       '1.5px solid rgba(245,197,24,0.12)',
-        }} />
-
-        {/* HTCC crest circle — solid gold ring matching navbar badge */}
-        <div style={{
-          position:       'absolute',
-          inset:          border * 2,
+          position:       'relative',
+          width:          crestSize,
+          height:         crestSize,
           borderRadius:   '50%',
           background:     '#0D1B2A',
-          border:         '3px solid #F5C518',
-          boxShadow:      '0 0 0 4px rgba(245,197,24,0.25), 0 0 20px rgba(245,197,24,0.45), 0 2px 12px rgba(0,0,0,0.6)',
+          border:         `3px solid #F5C518`,
+          boxShadow:      '0 0 0 3px rgba(245,197,24,0.25), 0 0 18px rgba(245,197,24,0.5)',
           overflow:       'hidden',
           display:        'flex',
           alignItems:     'center',
           justifyContent: 'center',
+          zIndex:         1,
+          flexShrink:     0,
         }}>
           <img
             src="/assets/images/htcc-logo.png"
@@ -75,9 +78,10 @@ export default function ClubLoader({ message = 'Loading…', size = 72 }) {
             }}
           />
         </div>
+
       </div>
 
-      {/* ── Pulsing message ── */}
+      {/* ── Pulsing message below ── */}
       {message && (
         <div style={{
           fontSize:      '11px',
@@ -90,6 +94,7 @@ export default function ClubLoader({ message = 'Loading…', size = 72 }) {
           {message}
         </div>
       )}
+
     </div>
   )
 }

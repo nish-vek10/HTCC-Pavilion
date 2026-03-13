@@ -675,14 +675,15 @@ body {
     height: 56px !important;
   }
   /* Show HTCC identity on mobile — scaled down */
-  .landing-nav-htcc       { display: flex !important; gap: 7px !important; }
-  .landing-crest-badge    { width: 30px !important; height: 30px !important; }
+  .landing-nav-htcc       { display: flex !important; gap: 8px !important; }
+  .landing-crest-badge    { width: 34px !important; height: 34px !important; }
   .landing-crest-name span:first-child {
-    font-size:      11px !important;
-    letter-spacing: 0.06em !important;
+    font-size:      14px !important;
+    letter-spacing: 0.07em !important;
   }
   .landing-crest-name span:last-child {
-    font-size: 7px !important;
+    font-size:      8px !important;
+    letter-spacing: 0.12em !important;
   }
   /* Hide divider on mobile */
   .landing-nav-divider  { display: none !important; }
