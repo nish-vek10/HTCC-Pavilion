@@ -623,15 +623,16 @@ body {
     gap:           7px !important;
   }
   .navbar-htcc-crest {
-    width:  30px !important;
-    height: 30px !important;
+    width:  32px !important;
+    height: 32px !important;
   }
   .navbar-htcc-text-primary {
-    font-size:      13px !important;
-    letter-spacing: 0.08em !important;
+    font-size:      15px !important;
+    letter-spacing: 0.07em !important;
   }
   .navbar-htcc-text-secondary {
-    font-size: 8px !important;
+    font-size:      9px !important;
+    letter-spacing: 0.12em !important;
   }
 
   /* ── Navbar: remove hamburger — profile dropdown + bottom bar handles all nav ── */

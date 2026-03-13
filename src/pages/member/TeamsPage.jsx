@@ -326,7 +326,6 @@ export default function TeamsPage() {
                             >
                               {tFixtures.map(fixture => {
                                 const myStatus = availability[fixture.id] || null
-                                const curIdx   = carouselIdx[team.id] || 0
                                 return (
                                   <div key={fixture.id} className="team-fixture-carousel-item">
                                     <div style={{
@@ -380,7 +379,7 @@ export default function TeamsPage() {
                                           return (
                                             <button
                                               key={status}
-                                              onClick={() => setStatus(fixture.id, status)}
+                                              onClick={(e) => { e.stopPropagation(); setStatus(fixture.id, status) }}
                                               style={{
                                                 flex: 1,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
