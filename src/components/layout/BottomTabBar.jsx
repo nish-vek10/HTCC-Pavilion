@@ -8,19 +8,20 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore.js'
 import { ROUTES } from '../../lib/constants.js'
 
-// ─── CONFIGURABLE: Tab definitions per role ────────
+// ─── CONFIGURABLE: Tab definitions per role ────────────
+// icon: emoji string, OR null to render the HTCC crest badge instead
 const MEMBER_TABS = [
-  { label: 'Home',     path: ROUTES.DASHBOARD,  icon: '⚡' },
-  { label: 'Fixtures', path: ROUTES.FIXTURES,   icon: '📅' },
-  { label: 'Teams',    path: ROUTES.TEAMS,      icon: '🏏' },
-  { label: 'Profile',  path: ROUTES.PROFILE,    icon: '👤' },
+  { label: 'Home',     path: ROUTES.DASHBOARD,  icon: '⚡'  },
+  { label: 'Fixtures', path: ROUTES.FIXTURES,   icon: '📅'  },
+  { label: 'Teams',    path: ROUTES.TEAMS,      icon: null  },  // HTCC crest
+  { label: 'Profile',  path: ROUTES.PROFILE,    icon: '👤'  },
 ]
 
 const CAPTAIN_TABS = [
-  { label: 'Home',     path: ROUTES.DASHBOARD,       icon: '⚡' },
-  { label: 'Teams',    path: ROUTES.TEAMS,           icon: '🏏' },
-  { label: 'Fixtures', path: '/captain/fixtures',    icon: '📅' },
-  { label: 'Profile',  path: ROUTES.PROFILE,         icon: '👤' },
+  { label: 'Home',     path: ROUTES.DASHBOARD,       icon: '⚡'  },
+  { label: 'Teams',    path: ROUTES.TEAMS,           icon: null  },  // HTCC crest
+  { label: 'Fixtures', path: '/captain/fixtures',    icon: '📅'  },
+  { label: 'Profile',  path: ROUTES.PROFILE,         icon: '👤'  },
 ]
 
 const ADMIN_TABS = [
@@ -96,16 +97,50 @@ export default function BottomTabBar() {
               }} />
             )}
 
-            {/* ── Tab icon ── */}
-            <span style={{
-              fontSize:   '20px',
-              lineHeight: 1,
-              filter:     isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
-              transform:  isActive ? 'scale(1.15)' : 'scale(1)',
-              transition: 'all 0.2s ease',
-            }}>
-              {tab.icon}
-            </span>
+            {/* ── Tab icon: emoji or HTCC crest ── */}
+            {tab.icon === null ? (
+              // HTCC crest with gold ring — used for Teams tab
+              <div style={{
+                width:        '24px',
+                height:       '24px',
+                borderRadius: '50%',
+                background:   '#0D1B2A',
+                border:       isActive ? '2px solid #F5C518' : '2px solid rgba(139,155,180,0.4)',
+                boxShadow:    isActive
+                  ? '0 0 0 2px rgba(245,197,24,0.25), 0 0 8px rgba(245,197,24,0.4)'
+                  : 'none',
+                overflow:     'hidden',
+                display:      'flex',
+                alignItems:   'center',
+                justifyContent: 'center',
+                flexShrink:   0,
+                transform:    isActive ? 'scale(1.15)' : 'scale(1)',
+                transition:   'all 0.2s ease',
+              }}>
+                <img
+                  src="/assets/images/htcc-logo.png"
+                  alt="Teams"
+                  style={{
+                    width:          '100%',
+                    height:         '100%',
+                    objectFit:      'cover',
+                    objectPosition: 'center 20%',
+                    mixBlendMode:   'screen',
+                    opacity:        isActive ? 1 : 0.5,
+                  }}
+                />
+              </div>
+            ) : (
+              <span style={{
+                fontSize:   '20px',
+                lineHeight: 1,
+                filter:     isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
+                transform:  isActive ? 'scale(1.15)' : 'scale(1)',
+                transition: 'all 0.2s ease',
+              }}>
+                {tab.icon}
+              </span>
+            )}
 
             {/* ── Tab label ── */}
             <span style={{
