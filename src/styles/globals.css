@@ -643,6 +643,16 @@ body {
   /* ── Navbar: hide name/role text in profile button ── */
   .navbar-profile-name { display: none !important; }
 
+  /* ── Navbar: hide Pavilion stacked text — icon alone is enough ── */
+  .navbar-pavilion-text { display: none !important; }
+
+  /* ── Navbar: slightly smaller Pavilion icon on mobile ── */
+  .navbar-pavilion-icon {
+    width:  30px !important;
+    height: 30px !important;
+    border-radius: 8px !important;
+  }
+
   /* ── Card: slightly rounder on mobile ── */
   .card { border-radius: 16px !important; }
 

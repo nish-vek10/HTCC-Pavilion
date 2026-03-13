@@ -95,6 +95,7 @@ export default function Navbar() {
           <img
             src="/assets/icons/pavilion-icon.svg"
             alt="Pavilion"
+            className="navbar-pavilion-icon"
             style={{
               width: '38px',
               height: '38px',
@@ -103,7 +104,7 @@ export default function Navbar() {
               flexShrink: 0,
             }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div className="navbar-pavilion-text" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{
               fontFamily: 'var(--font-display)',
               fontSize: '18px',
