@@ -647,8 +647,11 @@ body {
   /* ── Navbar: hide name/role text in profile button ── */
   .navbar-profile-name { display: none !important; }
 
-  /* ── Navbar: hide Pavilion stacked text — icon alone is enough ── */
-  .navbar-pavilion-text { display: none !important; }
+  /* ── Navbar: show Pavilion stacked text on mobile — matches native TopHeader ── */
+  /* (intentionally NOT hiding — PAVILION + HTCC text must show left of top bar) */
+
+  /* ── Navbar: hide profile dropdown on mobile — Profile tab handles this ── */
+  .navbar-profile-dropdown { display: none !important; }
 
   /* ── Navbar: slightly smaller Pavilion icon on mobile ── */
   .navbar-pavilion-icon {

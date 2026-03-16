@@ -191,8 +191,8 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Profile dropdown */}
-          <div ref={dropdownRef} style={{ position: 'relative' }}>
+          {/* Profile dropdown — hidden on mobile, handled by bottom tab bar Profile tab */}
+          <div ref={dropdownRef} className="navbar-profile-dropdown" style={{ position: 'relative' }}>
             <button
               onClick={() => setProfileOpen(p => !p)}
               style={{
