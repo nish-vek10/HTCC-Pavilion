@@ -1,14 +1,24 @@
 // pavilion-web/src/pages/admin/AdminDashboardPage.jsx
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
-import { PAGE_TITLES, MATCH_TYPE_LABELS, ROUTES } from '../../lib/constants.js'
+import ConfirmModal from '../../components/ui/ConfirmModal.jsx'
 import ClubLoader from '../../components/ui/ClubLoader.jsx'
+import { PAGE_TITLES, MATCH_TYPE_LABELS, ROUTES } from '../../lib/constants.js'
+
+// ── toLocalISO — avoids UTC/BST off-by-one (never use .toISOString()) ────────
+function toLocalISO(d) {
+  const year  = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day   = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 // ─── Audience badge meta ───────────────────────────
 const AUDIENCE_META = {
@@ -35,6 +45,8 @@ export default function AdminDashboardPage() {
   const [announcements, setAnnouncements] = useState([])
   const [joinRequests,  setJoinRequests]  = useState([])
   const [loading,       setLoading]       = useState(true)
+  // ── Confirm modal state — portalled to body to escape transform stacking ──
+  const [confirmModal,  setConfirmModal]  = useState({ open: false, title: '', message: '', onConfirm: null })
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_DASHBOARD }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -51,7 +63,7 @@ export default function AdminDashboardPage() {
       supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'pending'),
       supabase.from('profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
       supabase.from('fixtures').select('id', { count: 'exact' })
-        .gte('match_date', new Date().toISOString().split('T')[0]),
+        .gte('match_date', toLocalISO(new Date())),
     ])
     setStats({
       members:  members.count  || 0,
@@ -77,7 +89,7 @@ export default function AdminDashboardPage() {
     const { data, error } = await supabase
       .from('fixtures')
       .select('*, teams(name)')
-      .gte('match_date', new Date().toISOString().split('T')[0])
+      .gte('match_date', toLocalISO(new Date()))
       .order('match_date', { ascending: true })
       .limit(8)
 
@@ -125,9 +137,8 @@ export default function AdminDashboardPage() {
     setJoinRequests(merged)
   }
 
-  // ── Approve a team join request ──
+  // ── Approve a team join request — adds to team_members + sends notification ──
   const handleApproveJoin = async (req) => {
-    // Add to team_members
     const { error: insertErr } = await supabase
       .from('team_members')
       .insert({ player_id: req.player_id, team_id: req.team_id, status: 'active' })
@@ -136,6 +147,15 @@ export default function AdminDashboardPage() {
 
     // Mark request as approved
     await supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id)
+
+    // Send join_approved notification to the player
+    await supabase.from('notifications').insert({
+      user_id: req.player_id,
+      type:    'join_approved',
+      title:   `Squad Request Approved 🟢`,
+      body:    `Your request to join ${req.teams?.name} has been approved. Welcome to the squad!`,
+      read:    false,
+    })
 
     toast.success(`${req.profiles?.full_name} added to ${req.teams?.name}`)
     setJoinRequests(prev => prev.filter(r => r.id !== req.id))
@@ -148,38 +168,50 @@ export default function AdminDashboardPage() {
     setJoinRequests(prev => prev.filter(r => r.id !== req.id))
   }
 
-  // ── Approve a pending member ──
+  // ── Approve a pending member — updates role + sends welcome notification ──
   const handleApprove = async (memberId, name) => {
     const { error } = await supabase
       .from('profiles')
       .update({ role: 'member' })
       .eq('id', memberId)
 
-    if (error) {
-      toast.error('Failed to approve member')
-      return
-    }
+    if (error) { toast.error('Failed to approve member'); return }
+
+    // Send welcome notification to the new member
+    await supabase.from('notifications').insert({
+      user_id: memberId,
+      type:    'welcome',
+      title:   'Welcome to Harrow Town CC! 🏏',
+      body:    `Hi ${name}, your membership has been approved. Welcome to the club!`,
+      read:    false,
+    })
+
     toast.success(`${name} approved as member`)
     setPending(prev => prev.filter(p => p.id !== memberId))
     setStats(prev => ({ ...prev, pending: prev.pending - 1, members: prev.members + 1 }))
   }
 
-  // ── Reject / delete a pending member ──
+  // ── Reject a pending member — deletes their profile row ──
+  // Note: 'rejected' is NOT a valid user_role enum — always DELETE the profile
   const handleReject = async (memberId, name) => {
-    if (!window.confirm(`Reject and remove ${name}'s application?`)) return
-
-    const { error } = await supabase.auth.admin
-      ? await supabase.from('profiles').delete().eq('id', memberId)
-      : await supabase.from('profiles').update({ role: 'rejected' }).eq('id', memberId)
-
-    if (error) { toast.error('Failed to reject member'); return }
-
-    toast(`${name}'s application rejected`, { icon: '❌' })
-    setPending(prev => prev.filter(p => p.id !== memberId))
-    setStats(prev => ({ ...prev, pending: prev.pending - 1 }))
+    setConfirmModal({
+      open: true,
+      title: 'Reject Application',
+      message: `Reject and permanently remove ${name}'s application? This cannot be undone.`,
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, open: false }))
+        const { error } = await supabase.from('profiles').delete().eq('id', memberId)
+        if (error) { toast.error('Failed to reject member'); return }
+        toast(`${name}'s application rejected`, { icon: '❌' })
+        setPending(prev => prev.filter(p => p.id !== memberId))
+        setStats(prev => ({ ...prev, pending: prev.pending - 1 }))
+      },
+    })
   }
 
   return (
+    <>
     <AppShell>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
 
@@ -252,8 +284,8 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        {/* ── Two column layout ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
+        {/* ── Two column layout — stacks to single column on mobile ── */}
+        <div className="admin-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
 
           {/* ── Pending Approvals ── */}
           <div>
@@ -597,5 +629,27 @@ export default function AdminDashboardPage() {
 
       </div>{/* end page wrapper */}
     </AppShell>
+
+    {/* ── Confirm modal — portalled to body to escape page-fade-in transform ── */}
+    {confirmModal.open && createPortal(
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.danger ? 'Reject' : 'Confirm'}
+        cancelLabel="Cancel"
+        confirmDanger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, open: false }))}
+      />,
+      document.body
+    )}
+
+    <style>{`
+      @media (max-width: 768px) {
+        .admin-two-col { grid-template-columns: 1fr !important; }
+      }
+    `}</style>
+    </>
   )
 }
