@@ -75,7 +75,7 @@ export default function BottomTabBar() {
         return (
           <button
             key={tab.path}
-            onClick={() => navigate(tab.path)}
+            onClick={() => { navigate(tab.path); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
             style={{
               flex:                    1,
               display:                 'flex',

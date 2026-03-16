@@ -1,6 +1,7 @@
 // pavilion-web/src/components/layout/AppShell.jsx
 
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Navbar from './Navbar.jsx'
 import BottomTabBar from './BottomTabBar.jsx'
 
@@ -23,13 +24,22 @@ export default function AppShell({ children }) {
     localStorage.setItem('htcc-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
 
+  const location = useLocation()
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <Navbar />
-      <main className="app-main" style={{ minHeight: 'calc(100vh - 64px)' }}>
+      {/* key={location.pathname} remounts the content on every route change, triggering the fade-in */}
+      <main
+        key={location.pathname}
+        className="app-main"
+        style={{
+          minHeight: 'calc(100vh - 64px)',
+          animation: 'page-fade-in 0.22s ease forwards',
+        }}
+      >
         {children}
       </main>
-      {/* ── Bottom tab bar — mobile only, hidden on desktop via CSS ── */}
       <BottomTabBar />
     </div>
   )
