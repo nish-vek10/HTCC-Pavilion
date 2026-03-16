@@ -219,7 +219,8 @@ export default function TeamsPage() {
 
   // ── Helpers ──
   const isInTeam       = (teamId) => myTeams.some(t => t.id === teamId)
-  const hasPendingReq  = (teamId) => joinRequests.some(r => r.team_id === teamId)
+  // String coercion on both sides — guards against UUID type mismatch from Supabase
+  const hasPendingReq  = (teamId) => joinRequests.some(r => String(r.team_id) === String(teamId))
   const teamFixtures   = (teamId) => fixtures.filter(f => f.team_id === teamId)
 
   // ── Carousel: scroll to specific slide index ──
