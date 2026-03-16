@@ -13,12 +13,14 @@ const DROPDOWN_LIMIT = 8  // Max items shown in bell dropdown
 // ─── Notification type icon map ───────────────────
 const TYPE_ICON = {
   availability_reminder: '🏏',
+  training_reminder:     '🎯',
   squad_published:       '📋',
   approval:              '✅',
   welcome:               '👋',
-  join_approved:         '✅',
-  join_rejected:         '❌',
-  custom:                '📢',
+  join_approved:         '🟢',
+  role_change:           '🎖️',
+  announcement:          '📢',
+  custom:                '🔔',
 }
 
 export default function NotificationBell() {
@@ -107,8 +109,29 @@ export default function NotificationBell() {
   const handleNotifClick = async (notif) => {
     if (!notif.read) await markOneRead(notif.id)
     setOpen(false)
-    if (notif.fixture_id) {
-      navigate('/fixture/' + notif.fixture_id)
+
+    switch (notif.type) {
+      case 'availability_reminder':
+        if (notif.fixture_id) navigate('/fixture/' + notif.fixture_id)
+        break
+      case 'training_reminder':
+        navigate(notif.training_session_id
+          ? '/fixtures?training=' + notif.training_session_id
+          : '/fixtures')
+        break
+      case 'squad_published':
+        if (notif.fixture_id) navigate('/fixture-confirmation/' + notif.fixture_id)
+        break
+      case 'approval':
+      case 'welcome':
+      case 'join_approved':
+        navigate('/teams')
+        break
+      case 'role_change':
+        navigate('/profile')
+        break
+      default:
+        break
     }
   }
 

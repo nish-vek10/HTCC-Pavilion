@@ -92,11 +92,13 @@ export const SQUAD_SIZE = 11
 // ─── Notification types ───────────────────────────
 export const NOTIF_TYPES = {
   AVAILABILITY_REMINDER: 'availability_reminder',
+  TRAINING_REMINDER:     'training_reminder',
   SQUAD_PUBLISHED:       'squad_published',
   APPROVAL:              'approval',
+  ROLE_CHANGE:           'role_change',
   WELCOME:               'welcome',
   JOIN_APPROVED:         'join_approved',
-  JOIN_REJECTED:         'join_rejected',
+  ANNOUNCEMENT:          'announcement',
   CUSTOM:                'custom',
 }
 
@@ -128,11 +130,13 @@ export const ROUTES = {
   ADMIN_MEMBERS:        '/admin/members',
   ADMIN_FIXTURES:       '/admin/fixtures',
   ADMIN_ANNOUNCEMENTS:  '/admin/announcements',
-  NOTIFICATIONS:        '/notifications',
+  NOTIFICATIONS:          '/notifications',
+  MATCH_CONFIRMATION:     '/fixture-confirmation/:fixtureId',
 }
 
 // ─── Browser tab titles ───────────────────────────
 export const PAGE_TITLES = {
+  MATCH_CONFIRMATION:  'Pavilion · Match Confirmation',
   LANDING:             'Pavilion · HTCC',
   LOGIN:               'Pavilion · Sign In',
   SIGNUP:              'Pavilion · Join HTCC',

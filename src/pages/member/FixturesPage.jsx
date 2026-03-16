@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { format, parseISO, isPast } from 'date-fns'
 import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
@@ -52,9 +52,19 @@ export default function FixturesPage() {
   const [trainingSubmitting, setTrainingSubmitting] = useState(null)
   const [trainingModal,      setTrainingModal]      = useState(null) // session or null
   const [filterModalOpen,    setFilterModalOpen]    = useState(false)
+  const [searchParams]     = useSearchParams()
 
   useEffect(() => { document.title = 'Pavilion · Fixtures' }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
+
+  // ── Auto-open training modal when navigated from a training_reminder notif ─
+  // URL: /fixtures?training=SESSION_UUID
+  useEffect(() => {
+    const trainingId = searchParams.get('training')
+    if (!trainingId || trainingSessions.length === 0) return
+    const session = trainingSessions.find(s => s.id === trainingId)
+    if (session) setTrainingModal(session)
+  }, [searchParams, trainingSessions])
 
   const loadAll = async () => {
     setLoading(true)

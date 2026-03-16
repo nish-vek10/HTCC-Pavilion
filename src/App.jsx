@@ -35,6 +35,7 @@ import AdminMembersPage   from './pages/admin/AdminMembersPage.jsx'
 import AdminMatchdayPage      from './pages/admin/AdminMatchdayPage.jsx'
 import AdminAnnouncementsPage  from './pages/admin/AdminAnnouncementsPage.jsx'
 import NotificationsPage       from './pages/member/NotificationsPage.jsx'
+import MatchConfirmationPage   from './pages/member/MatchConfirmationPage.jsx'
 
 // ── Constants ──
 import { ROUTES } from './lib/constants.js'
@@ -136,6 +137,11 @@ export default function App() {
         {/* ── Notifications ── */}
         <Route path={ROUTES.NOTIFICATIONS} element={
           <MemberRoute><NotificationsPage /></MemberRoute>
+        } />
+
+        {/* ── Match confirmation — shown when squad is published ── */}
+        <Route path="/fixture-confirmation/:fixtureId" element={
+          <MemberRoute><MatchConfirmationPage /></MemberRoute>
         } />
 
         {/* ── Catch-all ── */}

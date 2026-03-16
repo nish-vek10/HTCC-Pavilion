@@ -9,23 +9,28 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import { PAGE_TITLES } from '../../lib/constants.js'
 
 // ─── CONFIGURABLE ─────────────────────────────────
+// ─── Distinct emoji per notification type ─────────────────────────────────────
 const TYPE_ICON = {
-  availability_reminder: '🏏',
-  squad_published:       '📋',
-  approval:              '✅',
-  welcome:               '👋',
-  join_approved:         '✅',
-  join_rejected:         '❌',
-  custom:                '📢',
+  availability_reminder: '🏏',   // fixture availability prompt
+  training_reminder:     '🎯',   // training session reminder
+  squad_published:       '📋',   // squad selected — confirm playing
+  approval:              '✅',   // membership approved
+  welcome:               '👋',   // welcome to club
+  join_approved:         '🟢',   // team join request approved
+  role_change:           '🎖️',  // promoted to captain/admin
+  announcement:          '📢',   // club announcement
+  custom:                '🔔',   // generic
 }
 
 const TYPE_COLOR = {
   availability_reminder: 'var(--gold)',
+  training_reminder:     '#60A5FA',
   squad_published:       'var(--green)',
   approval:              'var(--green)',
   welcome:               '#60A5FA',
   join_approved:         'var(--green)',
-  join_rejected:         'var(--red)',
+  role_change:           '#A78BFA',
+  announcement:          'var(--gold)',
   custom:                'var(--text-muted)',
 }
 
@@ -64,17 +69,51 @@ export default function NotificationsPage() {
 
   // ── Mark single as read + navigate ──
   const handleClick = async (notif) => {
+    // ── Mark as read ──────────────────────────────────────────────────────────
     if (!notif.read) {
-      await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notif.id)
+      await supabase.from('notifications').update({ read: true }).eq('id', notif.id)
       setNotifications(prev =>
         prev.map(n => n.id === notif.id ? { ...n, read: true } : n)
       )
     }
-    if (notif.fixture_id) {
-      navigate('/fixture/' + notif.fixture_id)
+
+    // ── Navigate based on notification type ───────────────────────────────────
+    switch (notif.type) {
+
+      // Fixture availability prompt → fixture detail page
+      case 'availability_reminder':
+        if (notif.fixture_id) navigate('/fixture/' + notif.fixture_id)
+        break
+
+      // Training reminder → fixtures page, auto-opens that session's modal
+      case 'training_reminder':
+        if (notif.training_session_id) {
+          navigate('/fixtures?training=' + notif.training_session_id)
+        } else {
+          navigate('/fixtures')
+        }
+        break
+
+      // Squad published → match confirmation page (Playing / Not Playing)
+      case 'squad_published':
+        if (notif.fixture_id) navigate('/fixture-confirmation/' + notif.fixture_id)
+        break
+
+      // Membership/team approval → teams page
+      case 'approval':
+      case 'welcome':
+      case 'join_approved':
+        navigate('/teams')
+        break
+
+      // Role promotion → profile page
+      case 'role_change':
+        navigate('/profile')
+        break
+
+      // Announcements/custom → no navigation
+      default:
+        break
     }
   }
 
@@ -292,12 +331,19 @@ export default function NotificationsPage() {
                           }}>
                             {notif.body}
                           </div>
-                          {notif.fixture_id && (
+                          {/* ── Call to action per type ── */}
+                          {(notif.fixture_id || notif.training_session_id || ['approval','welcome','join_approved','role_change'].includes(notif.type)) && (
                             <div style={{
                               fontSize: '12px', color: accentColor,
                               fontWeight: 600, marginTop: '6px',
                             }}>
-                              Tap to set availability →
+                              {notif.type === 'squad_published'       && 'Tap to confirm match day availability →'}
+                              {notif.type === 'availability_reminder' && 'Tap to set availability →'}
+                              {notif.type === 'training_reminder'     && 'Tap to set training availability →'}
+                              {notif.type === 'approval'              && 'Tap to view your teams →'}
+                              {notif.type === 'welcome'               && 'Tap to view your teams →'}
+                              {notif.type === 'join_approved'         && 'Tap to view your teams →'}
+                              {notif.type === 'role_change'           && 'Tap to view your profile →'}
                             </div>
                           )}
                         </div>
