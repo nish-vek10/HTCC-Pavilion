@@ -150,17 +150,36 @@ export default function Navbar() {
         {/* ── Right: HTCC identity + profile dropdown ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
 
-          {/* HTCC crest + club name */}
+          {/* HTCC identity — text right-aligned then crest, mirrors native TopHeader exactly */}
           <div className="navbar-htcc-identity" style={{
             display: 'flex', alignItems: 'center', gap: '10px',
             paddingRight: '12px',
             borderRight: '1px solid var(--navy-border)',
           }}>
+            {/* Club name — right-aligned, text before crest (matches native order) */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+              <span className="navbar-htcc-text-primary" style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '18px', letterSpacing: '2px',
+                color: '#F5C518', lineHeight: '19px',
+              }}>
+                HARROW TOWN
+              </span>
+              <span className="navbar-htcc-text-secondary" style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '11px', letterSpacing: '4px',
+                color: '#8B9BB4', lineHeight: '14px',
+                marginTop: '2px',
+              }}>
+                CRICKET CLUB
+              </span>
+            </div>
+            {/* HTCC crest — far right, matches native crestRing */}
             <div className="navbar-htcc-crest" style={{
-              width: '38px', height: '38px', borderRadius: '50%',
+              width: '36px', height: '36px', borderRadius: '50%',
               background: '#0D1B2A',
-              border: '2px solid #F5C518',
-              boxShadow: '0 0 0 3px rgba(245,197,24,0.12), 0 2px 10px rgba(0,0,0,0.6)',
+              border: '1.5px solid #F5C518',
+              boxShadow: '0 0 0 0 rgba(245,197,24,0.3), 0 0 6px rgba(245,197,24,0.3)',
               overflow: 'hidden', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
@@ -169,22 +188,6 @@ export default function Navbar() {
                 alt="HTCC"
                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
               />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span className="navbar-htcc-text-primary" style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '18px', letterSpacing: '0.1em',
-                color: '#F5C518', lineHeight: 1,
-              }}>
-                HARROW TOWN
-              </span>
-              <span className="navbar-htcc-text-secondary" style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '11px', letterSpacing: '0.15em',
-                color: '#8B9BB4', lineHeight: 1,
-              }}>
-                CRICKET CLUB
-              </span>
             </div>
           </div>
 
