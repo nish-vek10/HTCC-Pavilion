@@ -685,33 +685,53 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ── Announcements ── */}
+        {/* ── Announcements carousel ── */}
         {!loading && announcements.length > 0 && (
           <div style={{ marginBottom: '40px' }}>
-            <div className="section-label">Club News</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+            <div className="section-label">CLUB NEWS</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '12px' }}>
               <div style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '26px', letterSpacing: '1px',
-                color: 'var(--text-primary)', marginBottom: 0,
+                color: 'var(--text-primary)',
               }}>
                 ANNOUNCEMENTS
               </div>
               {announcements.length > 1 && (
-                <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, opacity: 0.7, whiteSpace: 'nowrap' }}>
                   Swipe for more ›
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {announcements.map(ann => (
-                <div key={ann.id} className="card" style={{ padding: '18px 22px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginBottom: '6px' }}>
+            {/* Horizontal scroll carousel — one card per "page" */}
+            <div style={{
+              display: 'flex',
+              overflowX: 'auto',
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              gap: '12px',
+              paddingBottom: '4px',
+            }}>
+              <style>{`.ann-carousel::-webkit-scrollbar { display: none; }`}</style>
+              {announcements.map((ann, i) => (
+                <div
+                  key={ann.id}
+                  className="card ann-carousel"
+                  style={{
+                    flex: '0 0 100%',
+                    scrollSnapAlign: 'start',
+                    padding: '16px 18px',
+                    boxSizing: 'border-box',
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
                     {format(parseISO(ann.created_at), 'EEE, d MMM yyyy')}
                   </div>
                   <div style={{
                     fontWeight: 700, fontSize: '14px',
-                    color: 'var(--text-primary)', marginBottom: '6px',
+                    color: 'var(--text-primary)', marginBottom: '8px',
                     textTransform: 'uppercase', letterSpacing: '0.3px',
                   }}>
                     {ann.title}
@@ -722,28 +742,49 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+            {/* Carousel dots */}
+            {announcements.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '10px' }}>
+                {announcements.map((_, i) => (
+                  <div key={i} style={{
+                    width: '6px', height: '6px', borderRadius: '3px',
+                    background: 'rgba(255,255,255,0.15)',
+                  }} />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Training sessions strip ── */}
+        {/* ── Training sessions carousel ── */}
         {!loading && trainingSessions.length > 0 && (
           <div style={{ marginBottom: '40px' }}>
-            <div className="section-label">Upcoming Training</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+            <div className="section-label">UPCOMING TRAINING</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '12px' }}>
               <div style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '26px', letterSpacing: '1px',
-                color: 'var(--text-primary)', marginBottom: 0,
+                color: 'var(--text-primary)',
               }}>
                 SESSIONS
               </div>
               {trainingSessions.length > 1 && (
-                <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, opacity: 0.7, whiteSpace: 'nowrap' }}>
                   Swipe for more ›
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Horizontal scroll carousel */}
+            <div style={{
+              display: 'flex',
+              overflowX: 'auto',
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              gap: '12px',
+              paddingBottom: '4px',
+            }}>
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
               {trainingSessions.map(session => {
                 const myStatus  = trainingAvail[session.id] || null
                 const isLoading = trainingSubmitting === session.id
@@ -852,6 +893,18 @@ export default function DashboardPage() {
                 )
               })}
             </div>
+            </div>
+            {/* Carousel dots */}
+            {trainingSessions.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '10px' }}>
+                {trainingSessions.map((_, i) => (
+                  <div key={i} style={{
+                    width: '6px', height: '6px', borderRadius: '3px',
+                    background: 'rgba(255,255,255,0.15)',
+                  }} />
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,42 +1,43 @@
 // pavilion-web/src/components/layout/BottomTabBar.jsx
-
-// ── iOS-style fixed bottom navigation bar ──
-// Shown only on mobile (≤768px) via CSS.
-// Replaces the hamburger menu entirely on small screens.
+// iOS-style fixed bottom navigation bar.
+// Shown only on mobile (≤768px) via CSS — hidden on desktop.
+// Member: Home / Fixtures / Teams / Alerts / Profile — matches native app exactly.
 
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore.js'
 import { ROUTES } from '../../lib/constants.js'
 
-// ─── CONFIGURABLE: Tab definitions per role ────────────
+// ─── CONFIGURABLE: Tab definitions per role ───────────────────────────────────
 // icon: emoji string, OR null to render the HTCC crest badge instead
 const MEMBER_TABS = [
-  { label: 'Home',     path: ROUTES.DASHBOARD,  icon: '⚡'  },
-  { label: 'Fixtures', path: ROUTES.FIXTURES,   icon: '📅'  },
-  { label: 'Teams',    path: ROUTES.TEAMS,      icon: null  },  // HTCC crest
-  { label: 'Profile',  path: ROUTES.PROFILE,    icon: '👤'  },
+  { label: 'Home',     path: ROUTES.DASHBOARD,     icon: '⚡'  },
+  { label: 'Fixtures', path: ROUTES.FIXTURES,      icon: '📅'  },
+  { label: 'Teams',    path: ROUTES.TEAMS,         icon: null  },  // HTCC crest
+  { label: 'Alerts',   path: ROUTES.NOTIFICATIONS, icon: '🔔'  },
+  { label: 'Profile',  path: ROUTES.PROFILE,       icon: '👤'  },
 ]
 
 const CAPTAIN_TABS = [
-  { label: 'Home',     path: ROUTES.DASHBOARD,       icon: '⚡'  },
-  { label: 'Teams',    path: ROUTES.TEAMS,           icon: null  },  // HTCC crest
-  { label: 'Fixtures', path: '/captain/fixtures',    icon: '📅'  },
-  { label: 'Profile',  path: ROUTES.PROFILE,         icon: '👤'  },
+  { label: 'Home',     path: ROUTES.DASHBOARD,      icon: '⚡'  },
+  { label: 'Fixtures', path: '/captain/fixtures',   icon: '📅'  },
+  { label: 'Teams',    path: ROUTES.TEAMS,          icon: null  },  // HTCC crest
+  { label: 'Alerts',   path: ROUTES.NOTIFICATIONS,  icon: '🔔'  },
+  { label: 'Profile',  path: ROUTES.PROFILE,        icon: '👤'  },
 ]
 
 const ADMIN_TABS = [
-  { label: 'Overview',  path: ROUTES.ADMIN_DASHBOARD,      icon: '📊' },
-  { label: 'Matchday',  path: '/admin/matchday',           icon: '⚡' },
-  { label: 'Fixtures',  path: ROUTES.ADMIN_FIXTURES,       icon: '📅' },
-  { label: 'Members',   path: ROUTES.ADMIN_MEMBERS,        icon: '👥' },
-  { label: 'Announce',  path: ROUTES.ADMIN_ANNOUNCEMENTS,  icon: '📢' },
+  { label: 'Overview', path: ROUTES.ADMIN_DASHBOARD,     icon: '📊' },
+  { label: 'Matchday', path: '/admin/matchday',          icon: '⚡' },
+  { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅' },
+  { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥' },
+  { label: 'Announce', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '📢' },
 ]
 
 export default function BottomTabBar() {
-  const navigate     = useNavigate()
-  const location     = useLocation()
-  const isAdmin      = useAuthStore(state => state.isAdmin)
-  const isCaptain    = useAuthStore(state => state.isCaptain)
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const isAdmin   = useAuthStore(state => state.isAdmin)
+  const isCaptain = useAuthStore(state => state.isCaptain)
 
   const tabs = isAdmin() ? ADMIN_TABS : isCaptain() ? CAPTAIN_TABS : MEMBER_TABS
 
@@ -44,21 +45,21 @@ export default function BottomTabBar() {
     <nav
       className="bottom-tab-bar"
       style={{
-        position:       'fixed',
-        bottom:         0, left: 0, right: 0,
-        zIndex:         200,
-        background:     'rgba(13,27,42,0.97)',
-        backdropFilter: 'blur(20px)',
+        position:             'fixed',
+        bottom: 0, left: 0, right: 0,
+        zIndex:               200,
+        background:           'rgba(13,27,42,0.97)',
+        backdropFilter:       'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderTop:      '1px solid rgba(245,197,24,0.15)',
-        display:        'flex',
-        alignItems:     'stretch',
-        paddingBottom:  'env(safe-area-inset-bottom)',
-        boxShadow:      '0 -4px 32px rgba(0,0,0,0.5)',
+        borderTop:            '1px solid rgba(245,197,24,0.15)',
+        display:              'flex',
+        alignItems:           'stretch',
+        paddingBottom:        'env(safe-area-inset-bottom)',
+        boxShadow:            '0 -4px 32px rgba(0,0,0,0.5)',
       }}
     >
       {tabs.map(tab => {
-        // Exact match for /admin root, prefix match for everything else
+        // Exact match for /admin root; prefix match for all other paths
         const isActive = tab.path === '/admin'
           ? location.pathname === '/admin'
           : location.pathname === tab.path ||
@@ -69,88 +70,79 @@ export default function BottomTabBar() {
             key={tab.path}
             onClick={() => navigate(tab.path)}
             style={{
-              flex:           1,
-              display:        'flex',
-              flexDirection:  'column',
-              alignItems:     'center',
-              justifyContent: 'center',
-              gap:            '4px',
-              padding:        '10px 4px 12px',
-              background:     'none',
-              border:         'none',
-              cursor:         'pointer',
-              position:       'relative',
-              transition:     'all 0.2s ease',
-              minHeight:      '56px',
+              flex:                    1,
+              display:                 'flex',
+              flexDirection:           'column',
+              alignItems:              'center',
+              justifyContent:          'center',
+              gap:                     '4px',
+              padding:                 '10px 4px 12px',
+              background:              'none',
+              border:                  'none',
+              cursor:                  'pointer',
+              position:                'relative',
+              transition:              'all 0.2s ease',
+              minHeight:               '56px',
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {/* ── Active gold indicator dot ── */}
+            {/* Active gold dot indicator */}
             {isActive && (
               <div style={{
-                position:     'absolute',
-                top:          '6px',
-                width:        '4px', height: '4px',
+                position: 'absolute', top: '6px',
+                width: '4px', height: '4px',
                 borderRadius: '50%',
-                background:   '#F5C518',
-                boxShadow:    '0 0 6px rgba(245,197,24,0.9)',
+                background: '#F5C518',
+                boxShadow: '0 0 6px rgba(245,197,24,0.9)',
               }} />
             )}
 
-            {/* ── Tab icon: emoji or HTCC crest ── */}
+            {/* Icon — emoji or HTCC crest for Teams tab */}
             {tab.icon === null ? (
-              // HTCC crest with gold ring — used for Teams tab
               <div style={{
-                width:        '24px',
-                height:       '24px',
+                width: '24px', height: '24px',
                 borderRadius: '50%',
-                background:   '#0D1B2A',
-                border:       isActive ? '2px solid #F5C518' : '2px solid rgba(139,155,180,0.4)',
-                boxShadow:    isActive
+                background: '#0D1B2A',
+                border: isActive ? '2px solid #F5C518' : '2px solid rgba(139,155,180,0.4)',
+                boxShadow: isActive
                   ? '0 0 0 2px rgba(245,197,24,0.25), 0 0 8px rgba(245,197,24,0.4)'
                   : 'none',
-                overflow:     'hidden',
-                display:      'flex',
-                alignItems:   'center',
-                justifyContent: 'center',
-                flexShrink:   0,
-                transform:    isActive ? 'scale(1.15)' : 'scale(1)',
-                transition:   'all 0.2s ease',
+                overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                transition: 'all 0.2s ease',
               }}>
                 <img
                   src="/assets/images/htcc-logo.png"
                   alt="Teams"
                   style={{
-                    width:          '100%',
-                    height:         '100%',
-                    objectFit:      'cover',
-                    objectPosition: 'center 20%',
-                    mixBlendMode:   'screen',
-                    opacity:        isActive ? 1 : 0.5,
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', objectPosition: 'center 20%',
+                    mixBlendMode: 'screen',
+                    opacity: isActive ? 1 : 0.5,
                   }}
                 />
               </div>
             ) : (
               <span style={{
-                fontSize:   '20px',
-                lineHeight: 1,
-                filter:     isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
-                transform:  isActive ? 'scale(1.15)' : 'scale(1)',
+                fontSize: '20px', lineHeight: 1,
+                filter: isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
+                transform: isActive ? 'scale(1.15)' : 'scale(1)',
                 transition: 'all 0.2s ease',
               }}>
                 {tab.icon}
               </span>
             )}
 
-            {/* ── Tab label ── */}
+            {/* Label */}
             <span style={{
-              fontSize:     '10px',
-              fontWeight:   isActive ? 700 : 400,
-              color:        isActive ? '#F5C518' : '#8B9BB4',
-              letterSpacing:'0.3px',
-              lineHeight:   1,
-              transition:   'all 0.2s ease',
-              fontFamily:   'var(--font-body)',
+              fontSize: '10px',
+              fontWeight: isActive ? 700 : 400,
+              color: isActive ? '#F5C518' : '#8B9BB4',
+              letterSpacing: '0.3px', lineHeight: 1,
+              transition: 'all 0.2s ease',
+              fontFamily: 'var(--font-body)',
             }}>
               {tab.label}
             </span>
