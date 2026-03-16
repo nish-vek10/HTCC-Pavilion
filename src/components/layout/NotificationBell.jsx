@@ -124,6 +124,8 @@ export default function NotificationBell() {
         break
       case 'approval':
       case 'welcome':
+        navigate('/dashboard')
+        break
       case 'join_approved':
         navigate('/teams')
         break

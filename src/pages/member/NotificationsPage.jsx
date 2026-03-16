@@ -99,9 +99,13 @@ export default function NotificationsPage() {
         if (notif.fixture_id) navigate('/fixture-confirmation/' + notif.fixture_id)
         break
 
-      // Membership/team approval → teams page
+      // Membership approved → dashboard (welcome to the club)
       case 'approval':
       case 'welcome':
+        navigate('/dashboard')
+        break
+
+      // Team join request approved → teams page
       case 'join_approved':
         navigate('/teams')
         break
@@ -340,8 +344,8 @@ export default function NotificationsPage() {
                               {notif.type === 'squad_published'       && 'Tap to confirm match day availability →'}
                               {notif.type === 'availability_reminder' && 'Tap to set availability →'}
                               {notif.type === 'training_reminder'     && 'Tap to set training availability →'}
-                              {notif.type === 'approval'              && 'Tap to view your teams →'}
-                              {notif.type === 'welcome'               && 'Tap to view your teams →'}
+                              {notif.type === 'approval'              && 'Tap to go to your dashboard →'}
+                              {notif.type === 'welcome'               && 'Tap to go to your dashboard →'}
                               {notif.type === 'join_approved'         && 'Tap to view your teams →'}
                               {notif.type === 'role_change'           && 'Tap to view your profile →'}
                             </div>
