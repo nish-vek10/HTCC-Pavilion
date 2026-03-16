@@ -160,14 +160,14 @@ export default function Navbar() {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
               <span className="navbar-htcc-text-primary" style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '18px', letterSpacing: '2px',
-                color: '#F5C518', lineHeight: '19px',
+                fontSize: '24px', letterSpacing: '3px',
+                color: '#F5C518', lineHeight: '16px',
               }}>
                 HARROW TOWN
               </span>
               <span className="navbar-htcc-text-secondary" style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '11px', letterSpacing: '4px',
+                fontSize: '16px', letterSpacing: '6px',
                 color: '#8B9BB4', lineHeight: '14px',
                 marginTop: '2px',
               }}>
