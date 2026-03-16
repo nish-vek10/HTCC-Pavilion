@@ -38,6 +38,13 @@ export default function BottomTabBar() {
   const location  = useLocation()
   const isAdmin   = useAuthStore(state => state.isAdmin)
   const isCaptain = useAuthStore(state => state.isCaptain)
+  const profile   = useAuthStore(state => state.profile)
+
+  // Derive initials + avatar colour from profile — used for Profile tab icon
+  const avatarColor    = profile?.avatar_color || '#F5C518'
+  const avatarInitials = profile?.full_name
+    ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?'
 
   const tabs = isAdmin() ? ADMIN_TABS : isCaptain() ? CAPTAIN_TABS : MEMBER_TABS
 
@@ -97,8 +104,9 @@ export default function BottomTabBar() {
               }} />
             )}
 
-            {/* Icon — emoji or HTCC crest for Teams tab */}
+            {/* Icon — three cases: HTCC crest (Teams), avatar circle (Profile), emoji (all others) */}
             {tab.icon === null ? (
+              // HTCC crest — Teams tab
               <div style={{
                 width: '24px', height: '24px',
                 borderRadius: '50%',
@@ -124,7 +132,31 @@ export default function BottomTabBar() {
                   }}
                 />
               </div>
+            ) : tab.label === 'Profile' ? (
+              // Avatar circle with initials — Profile tab
+              <div style={{
+                width: '24px', height: '24px',
+                borderRadius: '50%',
+                background: `${avatarColor}22`,
+                border: isActive
+                  ? `2px solid ${avatarColor}`
+                  : '2px solid rgba(139,155,180,0.4)',
+                boxShadow: isActive
+                  ? `0 0 0 2px ${avatarColor}30, 0 0 8px ${avatarColor}50`
+                  : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                transition: 'all 0.2s ease',
+                fontSize: '9px', fontWeight: 700,
+                color: isActive ? avatarColor : 'rgba(139,155,180,0.7)',
+                fontFamily: 'var(--font-body)',
+                letterSpacing: '0.5px',
+              }}>
+                {avatarInitials}
+              </div>
             ) : (
+              // Emoji icon — all other tabs
               <span style={{
                 fontSize: '20px', lineHeight: 1,
                 filter: isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',

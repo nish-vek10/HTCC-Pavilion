@@ -1,11 +1,12 @@
 // pavilion-web/src/pages/member/ProfilePage.jsx
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
-import { PAGE_TITLES } from '../../lib/constants.js'
+import { PAGE_TITLES, ROUTES } from '../../lib/constants.js'
 
 // ─── CONFIGURABLE: Avatar accent colours to choose from ──
 const AVATAR_COLOURS = [
@@ -27,9 +28,17 @@ const ROLE_META = {
 }
 
 export default function ProfilePage() {
+  const navigate      = useNavigate()
   const profile       = useAuthStore(state => state.profile)
   const updateProfile = useAuthStore(state => state.updateProfile)
+  const signOut       = useAuthStore(state => state.signOut)
   const user          = useAuthStore(state => state.user)
+
+  const handleSignOut = async () => {
+    await signOut()
+    toast.success('Signed out successfully')
+    navigate(ROUTES.LANDING)
+  }
 
   const [form, setForm] = useState({
     full_name:    '',
@@ -321,6 +330,27 @@ export default function ProfilePage() {
               {pwLoading ? 'Updating…' : 'Update Password'}
             </button>
           </form>
+        </div>
+
+      {/* ── Sign Out ── */}
+        <div style={{ marginTop: '8px', marginBottom: '32px' }}>
+          <button
+            onClick={handleSignOut}
+            style={{
+              width: '100%', padding: '15px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-surface)',
+              border: '1px solid rgba(239,68,68,0.2)',
+              color: 'var(--red)',
+              fontSize: '15px', fontWeight: 600,
+              cursor: 'pointer', transition: 'var(--transition)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-surface)' }}
+          >
+            🚪  Sign Out
+          </button>
         </div>
 
       </div>
