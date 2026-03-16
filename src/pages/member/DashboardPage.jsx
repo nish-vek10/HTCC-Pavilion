@@ -688,14 +688,21 @@ export default function DashboardPage() {
         {!loading && announcements.length > 0 && (
           <div style={{ marginBottom: '40px' }}>
             <div className="section-label">Club News</div>
-            <div className="section-title" style={{ fontSize: '24px', marginBottom: '16px' }}>
-              Announcements
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+              <div className="section-title" style={{ fontSize: '24px', marginBottom: 0 }}>
+                Announcements
+              </div>
+              {announcements.length > 1 && (
+                <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  Swipe for more ›
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {announcements.map(ann => (
                 <div key={ann.id} className="card" style={{ padding: '18px 22px' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginBottom: '6px' }}>
-                    {format(parseISO(ann.created_at), 'EEE d MMM yyyy, HH:mm')}
+                    {format(parseISO(ann.created_at), 'EEE, d MMM yyyy')}
                   </div>
                   <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '6px' }}>
                     {ann.title}
@@ -713,8 +720,15 @@ export default function DashboardPage() {
         {!loading && trainingSessions.length > 0 && (
           <div style={{ marginBottom: '40px' }}>
             <div className="section-label">Upcoming Training</div>
-            <div className="section-title" style={{ fontSize: '24px', marginBottom: '16px' }}>
-              Training Sessions
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+              <div className="section-title" style={{ fontSize: '24px', marginBottom: 0 }}>
+                Training Sessions
+              </div>
+              {trainingSessions.length > 1 && (
+                <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  Swipe for more ›
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {trainingSessions.map(session => {
