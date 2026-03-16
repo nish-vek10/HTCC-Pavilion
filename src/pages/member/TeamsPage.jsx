@@ -8,7 +8,28 @@ import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import ConfirmModal from '../../components/ui/ConfirmModal.jsx'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 import { PAGE_TITLES, ROUTES, AVAILABILITY_CONFIG, MATCH_TYPE_LABELS } from '../../lib/constants.js'
+
+// ── toLocalISO — avoids UTC/BST off-by-one (never use .toISOString()) ────────
+function toLocalISO(d) {
+  const year  = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day   = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// ── Canonical team sort order — mirrors native TEAM_ORDER exactly ─────────────
+const TEAM_ORDER = ['1st XI', '2nd XI', '3rd XI', '4th XI', 'Sunday XI']
+function sortTeams(teams) {
+  return [...teams].sort((a, b) => {
+    const idx = name => {
+      const i = TEAM_ORDER.findIndex(t => name === t || name.includes(t.split(' ')[0]))
+      return i === -1 ? 999 : i
+    }
+    return idx(a.name) - idx(b.name)
+  })
+}
 
 export default function TeamsPage() {
   const navigate  = useNavigate()
@@ -58,13 +79,13 @@ export default function TeamsPage() {
     }
   }
 
-  // ── Fetch all teams for join requests ──
+  // ── Fetch all teams for join requests — sorted by canonical order ──────────
   const fetchAllTeams = async () => {
     const { data } = await supabase
       .from('teams')
       .select('id, name, day_type')
       .order('name')
-    if (data) setAllTeams(data)
+    if (data) setAllTeams(sortTeams(data))
   }
 
   // ── Fetch my pending join requests ──
@@ -79,7 +100,7 @@ export default function TeamsPage() {
 
   // ── Fetch upcoming fixtures + my availability ──
   const fetchFixturesAndAvailability = async (teamIds) => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalISO(new Date())
 
     const { data: fixtureData } = await supabase
       .from('fixtures')
@@ -229,7 +250,9 @@ export default function TeamsPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>Loading…</div>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <ClubLoader message="Loading your teams…" size={64} />
+          </div>
         ) : (
           <>
             {/* ── My current teams ── */}
@@ -404,6 +427,31 @@ export default function TeamsPage() {
                                             </button>
                                           )
                                         })}
+                                      </div>
+
+                                      {/* ── Status confirmation — mirrors native statusConfirm ── */}
+                                      {myStatus && (
+                                        <div style={{
+                                          marginTop: '10px', fontSize: '12px', fontWeight: 600,
+                                          color: AVAILABILITY_CONFIG[myStatus]?.color,
+                                          textAlign: 'center',
+                                        }}>
+                                          ✓ You're marked as {myStatus} for this match
+                                        </div>
+                                      )}
+
+                                      {/* ── View Details link — mirrors native carouselViewDetail ── */}
+                                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); navigate('/fixture/' + fixture.id) }}
+                                          style={{
+                                            background: 'none', border: 'none', cursor: 'pointer',
+                                            fontSize: '13px', fontWeight: 600, color: 'var(--gold)',
+                                            padding: 0,
+                                          }}
+                                        >
+                                          View Details →
+                                        </button>
                                       </div>
                                     </div>
                                   </div>
@@ -594,10 +642,75 @@ export default function TeamsPage() {
                         {satTeams.map(renderCard)}
                       </div>
                     )}
-                    {/* Sunday teams — full width below */}
+                    {/* Sunday teams — full width row layout, mirrors native joinCardWide */}
                     {sunTeams.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
-                        {sunTeams.map(renderCard)}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {sunTeams.map(team => {
+                          const alreadyIn = isInTeam(team.id)
+                          const pending   = hasPendingReq(team.id)
+                          return (
+                            <div key={team.id} className="card" style={{
+                              padding: '16px 18px',
+                              display: 'flex', alignItems: 'center',
+                              justifyContent: 'space-between', gap: '14px',
+                              border: pending ? '1px solid rgba(245,197,24,0.25)' : undefined,
+                            }}>
+                              {/* Left: crest + name */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                  width: '44px', height: '44px', borderRadius: '50%',
+                                  background: '#0D1B2A', border: '2px solid #F5C518',
+                                  boxShadow: '0 0 0 3px rgba(245,197,24,0.15)',
+                                  overflow: 'hidden', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  <img src="/assets/images/htcc-logo.png" alt="HTCC"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }} />
+                                </div>
+                                <div>
+                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '15px', letterSpacing: '1px', color: 'var(--text-primary)' }}>
+                                    {team.name.toUpperCase()}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize', marginTop: '2px' }}>
+                                    {team.day_type} fixture
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Right: action button */}
+                              {alreadyIn ? (
+                                <div style={{
+                                  padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                                  background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
+                                  fontSize: '12px', color: 'var(--green)', fontWeight: 700, flexShrink: 0,
+                                }}>✓ Member</div>
+                              ) : pending ? (
+                                <button
+                                  onClick={() => handleCancelJoinRequest(team.id, team.name)}
+                                  style={{
+                                    padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                                    background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)',
+                                    fontSize: '12px', color: 'var(--gold)', fontWeight: 700,
+                                    cursor: 'pointer', flexShrink: 0, transition: 'var(--transition)',
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.textContent = '✕ Cancel'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'; e.currentTarget.style.color = 'var(--red)' }}
+                                  onMouseLeave={e => { e.currentTarget.textContent = '⏳ Requested'; e.currentTarget.style.background = 'rgba(245,197,24,0.08)'; e.currentTarget.style.borderColor = 'rgba(245,197,24,0.25)'; e.currentTarget.style.color = 'var(--gold)' }}
+                                >⏳ Requested</button>
+                              ) : (
+                                <button
+                                  onClick={() => setJoinModal({ open: true, team })}
+                                  style={{
+                                    padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                                    background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)',
+                                    fontSize: '12px', color: '#60A5FA', fontWeight: 600,
+                                    cursor: 'pointer', flexShrink: 0, transition: 'var(--transition)',
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.16)' }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.08)' }}
+                                >+ Request</button>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </>
