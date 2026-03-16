@@ -522,16 +522,28 @@ export default function FixturesPage() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '12px',
                       flexShrink: 0, cursor: 'pointer',
-                      background: 'var(--bg-surface)',
-                      border: '1px solid rgba(96,165,250,0.2)',
-                      borderLeft: '3px solid #60A5FA',
+                      background: myStatus === 'available'
+                        ? 'rgba(34,197,94,0.04)'
+                        : myStatus === 'unavailable'
+                        ? 'rgba(239,68,68,0.04)'
+                        : 'var(--bg-surface)',
+                      border: myStatus === 'available'
+                        ? '1px solid rgba(34,197,94,0.2)'
+                        : myStatus === 'unavailable'
+                        ? '1px solid rgba(239,68,68,0.2)'
+                        : '1px solid rgba(96,165,250,0.2)',
+                      borderLeft: myStatus === 'available'
+                        ? '3px solid #22C55E'
+                        : myStatus === 'unavailable'
+                        ? '3px solid #EF4444'
+                        : '3px solid #60A5FA',
                       borderRadius: 'var(--radius-md)',
                       padding: '12px 14px',
                       minWidth: '240px', maxWidth: '300px',
                       transition: 'var(--transition)',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(96,165,250,0.2)'}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                   >
                     {/* Date block */}
                     <div style={{ textAlign: 'center', minWidth: '36px' }}>
