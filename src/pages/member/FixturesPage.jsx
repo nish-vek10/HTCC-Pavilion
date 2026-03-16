@@ -1,6 +1,7 @@
 // pavilion-web/src/pages/member/FixturesPage.jsx
 
 import { useEffect, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO, isPast } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -199,9 +200,243 @@ export default function FixturesPage() {
     typeFilter     !== ALL,
   ].filter(Boolean).length
 
+  // ── Portal modals — rendered into document.body to escape CSS transform
+  // stacking context created by AppShell's page-fade-in animation ──────────
+  const trainingModalPortal = trainingModal ? createPortal(
+    <>
+      <div
+        onClick={() => setTrainingModal(null)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        }}
+      />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1001,
+        background: 'var(--bg-surface)',
+        borderTop: '1px solid rgba(96,165,250,0.2)',
+        borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
+        padding: '12px 24px 48px',
+        animation: 'slide-up-sheet 0.25s ease forwards',
+      }}>
+        <style>{`
+          @keyframes slide-up-sheet {
+            from { transform: translateY(100%); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+          }
+        `}</style>
+        <div style={{
+          width: '36px', height: '4px', borderRadius: '2px',
+          background: 'var(--navy-border)', margin: '0 auto 20px',
+        }} />
+        <div style={{
+          fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+          color: '#60A5FA', marginBottom: '6px',
+        }}>
+          TRAINING SESSION
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: '22px', letterSpacing: '1px',
+          color: 'var(--text-primary)', marginBottom: '8px',
+        }}>
+          {trainingModal.title?.toUpperCase()}
+        </div>
+        {(() => {
+          const d      = new Date(trainingModal.session_date + 'T00:00:00')
+          const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          return (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1', marginBottom: '4px' }}>
+                📅 {days[d.getDay()]} {d.getDate()} {months[d.getMonth()]}
+                {'      '}
+                🕐 {trainingModal.session_time?.slice(0, 5)}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1' }}>
+                📍 {trainingModal.venue}
+              </div>
+            </div>
+          )
+        })()}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+          {[
+            { status: 'available',   label: 'Available',   color: '#22C55E', fill: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.35)'  },
+            { status: 'unavailable', label: 'Unavailable', color: '#EF4444', fill: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.3)'   },
+          ].map(opt => {
+            const isActive     = trainingAvail[trainingModal?.id] === opt.status
+            const isSubmitting = trainingSubmitting === trainingModal?.id
+            return (
+              <button
+                key={opt.status}
+                onClick={() => setTrainingStatus(trainingModal.id, opt.status)}
+                disabled={isSubmitting}
+                style={{
+                  flex: 1, padding: '14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: `1px solid ${isActive ? opt.border : 'var(--navy-border)'}`,
+                  background: isActive ? opt.fill : 'transparent',
+                  color: isActive ? opt.color : 'var(--text-muted)',
+                  fontSize: '14px', fontWeight: isActive ? 700 : 400,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  transition: 'var(--transition)',
+                }}
+              >
+                <div style={{
+                  width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
+                  background: isActive ? opt.color : 'rgba(255,255,255,0.2)',
+                }} />
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+        {trainingAvail[trainingModal.id] && (
+          <div style={{
+            fontSize: '13px', fontWeight: 700, textAlign: 'center', marginBottom: '14px',
+            color: trainingAvail[trainingModal.id] === 'available' ? '#22C55E' : '#EF4444',
+          }}>
+            ✓ You are {trainingAvail[trainingModal.id] === 'available' ? 'attending' : 'unavailable for'} this session
+          </div>
+        )}
+        <button
+          onClick={() => setTrainingModal(null)}
+          style={{
+            width: '100%', padding: '13px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--navy-border)',
+            background: 'transparent',
+            color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </>,
+    document.body
+  ) : null
+
+  const filterModalPortal = filterModalOpen ? createPortal(
+    <>
+      <div
+        onClick={() => setFilterModalOpen(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        }}
+      />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1001,
+        background: 'var(--bg-surface)',
+        borderTop: '1px solid rgba(245,197,24,0.15)',
+        borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
+        padding: '12px 24px 48px',
+        animation: 'slide-up-sheet 0.25s ease forwards',
+      }}>
+        <div style={{
+          width: '36px', height: '4px', borderRadius: '2px',
+          background: 'var(--navy-border)', margin: '0 auto 20px',
+        }} />
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', marginBottom: '24px',
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '22px', letterSpacing: '3px', color: 'var(--text-primary)',
+          }}>
+            FILTERS
+          </div>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '13px', color: 'var(--red)', fontWeight: 600,
+              }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
+          {/* Venue */}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase' }}>Venue</div>
+            {[
+              { key: ALL, label: 'ALL' }, { key: 'home', label: 'HOME' },
+              { key: 'away', label: 'AWAY' }, { key: 'neutral', label: 'NEUTRAL' },
+            ].map(opt => (
+              <button key={opt.key} onClick={() => setHomeAwayFilter(opt.key)} style={{
+                display: 'block', width: '100%', padding: '10px 12px', marginBottom: '8px',
+                borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                border: homeAwayFilter === opt.key ? '1px solid rgba(245,197,24,0.4)' : '1px solid var(--navy-border)',
+                background: homeAwayFilter === opt.key ? 'rgba(245,197,24,0.08)' : 'transparent',
+                color: homeAwayFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
+                fontSize: '12px', fontWeight: homeAwayFilter === opt.key ? 700 : 400,
+                textAlign: 'center', transition: 'var(--transition)',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+          {/* Team */}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase' }}>Team</div>
+            {[{ id: ALL, name: 'ALL' }, ...myTeams].map(t => (
+              <button key={t.id} onClick={() => setTeamFilter(t.id)} style={{
+                display: 'block', width: '100%', padding: '10px 12px', marginBottom: '8px',
+                borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                border: teamFilter === t.id ? '1px solid rgba(245,197,24,0.4)' : '1px solid var(--navy-border)',
+                background: teamFilter === t.id ? 'rgba(245,197,24,0.08)' : 'transparent',
+                color: teamFilter === t.id ? 'var(--gold)' : 'var(--text-muted)',
+                fontSize: '12px', fontWeight: teamFilter === t.id ? 700 : 400,
+                textAlign: 'center', transition: 'var(--transition)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{t.name.toUpperCase()}</button>
+            ))}
+          </div>
+          {/* Type */}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase' }}>Type</div>
+            {[
+              { key: ALL, label: 'ALL' }, { key: 'league', label: 'MCCL' },
+              { key: 'cup', label: 'CUP' }, { key: 'friendly', label: 'FRIENDLY' },
+              { key: 'sunday_comp', label: 'CVSL' },
+            ].map(opt => (
+              <button key={opt.key} onClick={() => setTypeFilter(opt.key)} style={{
+                display: 'block', width: '100%', padding: '10px 12px', marginBottom: '8px',
+                borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                border: typeFilter === opt.key ? '1px solid rgba(245,197,24,0.4)' : '1px solid var(--navy-border)',
+                background: typeFilter === opt.key ? 'rgba(245,197,24,0.08)' : 'transparent',
+                color: typeFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
+                fontSize: '12px', fontWeight: typeFilter === opt.key ? 700 : 400,
+                textAlign: 'center', transition: 'var(--transition)',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={() => setFilterModalOpen(false)}
+          style={{
+            width: '100%', padding: '15px', borderRadius: 'var(--radius-md)',
+            background: 'var(--gold)', color: 'var(--navy)',
+            fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer',
+          }}
+        >
+          Apply Filters
+        </button>
+      </div>
+    </>,
+    document.body
+  ) : null
+
   return (
-    <AppShell>
-      <div className="page-inner" style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
+    <>
+      {trainingModalPortal}
+      {filterModalPortal}
+      <AppShell>
+        <div className="page-inner" style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
 
         {/* ── Header ── */}
         <div style={{ marginBottom: '32px' }}>
@@ -354,133 +589,6 @@ export default function FixturesPage() {
           </div>
         )}
 
-        {/* ── Training availability modal ── */}
-        {trainingModal && (
-          <>
-            {/* Backdrop */}
-            <div
-              onClick={() => setTrainingModal(null)}
-              style={{
-                position: 'fixed', inset: 0, zIndex: 400,
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(4px)',
-              }}
-            />
-            {/* Bottom sheet */}
-            <div style={{
-              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 401,
-              background: 'var(--bg-surface)',
-              borderTop: '1px solid rgba(96,165,250,0.2)',
-              borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
-              padding: '12px 24px 48px',
-              animation: 'slide-up-sheet 0.25s ease forwards',
-            }}>
-              <style>{`
-                @keyframes slide-up-sheet {
-                  from { transform: translateY(100%); opacity: 0; }
-                  to   { transform: translateY(0);    opacity: 1; }
-                }
-              `}</style>
-              {/* Handle */}
-              <div style={{
-                width: '36px', height: '4px', borderRadius: '2px',
-                background: 'var(--navy-border)',
-                margin: '0 auto 20px',
-              }} />
-              {/* Label */}
-              <div style={{
-                fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
-                color: '#60A5FA', marginBottom: '6px',
-              }}>
-                TRAINING SESSION
-              </div>
-              {/* Title */}
-              <div style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '22px', letterSpacing: '1px',
-                color: 'var(--text-primary)', marginBottom: '8px',
-              }}>
-                {trainingModal.title?.toUpperCase()}
-              </div>
-              {/* Meta */}
-              {(() => {
-                const d      = new Date(trainingModal.session_date + 'T00:00:00')
-                const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-                return (
-                  <div style={{ marginBottom: '20px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1', marginBottom: '4px' }}>
-                      📅 {days[d.getDay()]} {d.getDate()} {months[d.getMonth()]}
-                      {'      '}
-                      🕐 {trainingModal.session_time?.slice(0, 5)}
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1' }}>
-                      📍 {trainingModal.venue}
-                    </div>
-                  </div>
-                )
-              })()}
-              {/* Availability buttons */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-                {[
-                  { status: 'available',   label: 'Available',   color: '#22C55E', fill: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.35)'  },
-                  { status: 'unavailable', label: 'Unavailable', color: '#EF4444', fill: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.3)'   },
-                ].map(opt => {
-                  const isActive     = trainingAvail[trainingModal?.id] === opt.status
-                  const isSubmitting = trainingSubmitting === trainingModal?.id
-                  return (
-                    <button
-                      key={opt.status}
-                      onClick={() => setTrainingStatus(trainingModal.id, opt.status)}
-                      disabled={isSubmitting}
-                      style={{
-                        flex: 1, padding: '14px',
-                        borderRadius: 'var(--radius-md)',
-                        border: `1px solid ${isActive ? opt.border : 'var(--navy-border)'}`,
-                        background: isActive ? opt.fill : 'transparent',
-                        color: isActive ? opt.color : 'var(--text-muted)',
-                        fontSize: '14px', fontWeight: isActive ? 700 : 400,
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                        transition: 'var(--transition)',
-                      }}
-                    >
-                      <div style={{
-                        width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
-                        background: isActive ? opt.color : 'rgba(255,255,255,0.2)',
-                      }} />
-                      {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
-              {/* Status confirmation */}
-              {trainingModal && trainingAvail[trainingModal.id] && (
-                <div style={{
-                  fontSize: '13px', fontWeight: 700, textAlign: 'center', marginBottom: '14px',
-                  color: trainingAvail[trainingModal.id] === 'available' ? '#22C55E' : '#EF4444',
-                }}>
-                  ✓ You are {trainingAvail[trainingModal.id] === 'available' ? 'attending' : 'unavailable for'} this session
-                </div>
-              )}
-              {/* Close */}
-              <button
-                onClick={() => setTrainingModal(null)}
-                style={{
-                  width: '100%', padding: '13px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--navy-border)',
-                  background: 'transparent',
-                  color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </>
-        )}
-
         {/* ── Filter row: period toggle + Filters button — mirrors native exactly ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
 
@@ -556,176 +664,6 @@ export default function FixturesPage() {
         <div style={{ fontSize: '12px', color: 'var(--text-faint)', textAlign: 'right', marginBottom: '24px' }}>
           {filtered.length} fixture{filtered.length !== 1 ? 's' : ''}
         </div>
-
-        {/* ── Filter bottom sheet modal — 3 columns: Venue / Team / Type ── */}
-        {filterModalOpen && (
-          <>
-            <div
-              onClick={() => setFilterModalOpen(false)}
-              style={{
-                position: 'fixed', inset: 0, zIndex: 400,
-                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-              }}
-            />
-            <div style={{
-              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 401,
-              background: 'var(--bg-surface)',
-              borderTop: '1px solid rgba(245,197,24,0.15)',
-              borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
-              padding: '12px 24px 48px',
-              animation: 'slide-up-sheet 0.25s ease forwards',
-            }}>
-              {/* Handle */}
-              <div style={{
-                width: '36px', height: '4px', borderRadius: '2px',
-                background: 'var(--navy-border)', margin: '0 auto 20px',
-              }} />
-              {/* Header */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', marginBottom: '24px',
-              }}>
-                <div style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '22px', letterSpacing: '3px', color: 'var(--text-primary)',
-                }}>
-                  FILTERS
-                </div>
-                {activeFilterCount > 0 && (
-                  <button
-                    onClick={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      fontSize: '13px', color: 'var(--red)', fontWeight: 600,
-                    }}
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-
-              {/* 3 columns — matches native modal exactly */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
-
-                {/* Column 1: Venue */}
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
-                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
-                  }}>
-                    Venue
-                  </div>
-                  {[
-                    { key: ALL,       label: 'ALL'     },
-                    { key: 'home',    label: 'HOME'    },
-                    { key: 'away',    label: 'AWAY'    },
-                    { key: 'neutral', label: 'NEUTRAL' },
-                  ].map(opt => (
-                    <button key={opt.key}
-                      onClick={() => setHomeAwayFilter(opt.key)}
-                      style={{
-                        display: 'block', width: '100%',
-                        padding: '10px 12px', marginBottom: '8px',
-                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                        border: homeAwayFilter === opt.key
-                          ? '1px solid rgba(245,197,24,0.4)'
-                          : '1px solid var(--navy-border)',
-                        background: homeAwayFilter === opt.key
-                          ? 'rgba(245,197,24,0.08)' : 'transparent',
-                        color: homeAwayFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
-                        fontSize: '12px', fontWeight: homeAwayFilter === opt.key ? 700 : 400,
-                        textAlign: 'center', transition: 'var(--transition)',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Column 2: Team */}
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
-                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
-                  }}>
-                    Team
-                  </div>
-                  {[{ id: ALL, name: 'ALL' }, ...myTeams].map(t => (
-                    <button key={t.id}
-                      onClick={() => setTeamFilter(t.id)}
-                      style={{
-                        display: 'block', width: '100%',
-                        padding: '10px 12px', marginBottom: '8px',
-                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                        border: teamFilter === t.id
-                          ? '1px solid rgba(245,197,24,0.4)'
-                          : '1px solid var(--navy-border)',
-                        background: teamFilter === t.id
-                          ? 'rgba(245,197,24,0.08)' : 'transparent',
-                        color: teamFilter === t.id ? 'var(--gold)' : 'var(--text-muted)',
-                        fontSize: '12px', fontWeight: teamFilter === t.id ? 700 : 400,
-                        textAlign: 'center', transition: 'var(--transition)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {t.name.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Column 3: Type */}
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
-                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
-                  }}>
-                    Type
-                  </div>
-                  {[
-                    { key: ALL,          label: 'ALL'      },
-                    { key: 'league',     label: 'MCCL'     },
-                    { key: 'cup',        label: 'CUP'      },
-                    { key: 'friendly',   label: 'FRIENDLY' },
-                    { key: 'sunday_comp',label: 'CVSL'     },
-                  ].map(opt => (
-                    <button key={opt.key}
-                      onClick={() => setTypeFilter(opt.key)}
-                      style={{
-                        display: 'block', width: '100%',
-                        padding: '10px 12px', marginBottom: '8px',
-                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                        border: typeFilter === opt.key
-                          ? '1px solid rgba(245,197,24,0.4)'
-                          : '1px solid var(--navy-border)',
-                        background: typeFilter === opt.key
-                          ? 'rgba(245,197,24,0.08)' : 'transparent',
-                        color: typeFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
-                        fontSize: '12px', fontWeight: typeFilter === opt.key ? 700 : 400,
-                        textAlign: 'center', transition: 'var(--transition)',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Apply button */}
-              <button
-                onClick={() => setFilterModalOpen(false)}
-                style={{
-                  width: '100%', padding: '15px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--gold)', color: 'var(--navy)',
-                  fontSize: '15px', fontWeight: 700,
-                  border: 'none', cursor: 'pointer',
-                }}
-              >
-                Apply Filters
-              </button>
-            </div>
-          </>
-        )}
 
         {/* ── Fixtures list ── */}
         {loading ? (
@@ -949,6 +887,7 @@ export default function FixturesPage() {
         )}
 
       </div>
-    </AppShell>
+      </AppShell>
+    </>
   )
 }
