@@ -774,17 +774,16 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            {/* Horizontal scroll carousel */}
+            {/* Horizontal scroll carousel — one card full width, snaps like native app */}
             <div style={{
               display: 'flex',
               overflowX: 'auto',
               scrollSnapType: 'x mandatory',
               WebkitOverflowScrolling: 'touch',
               scrollbarWidth: 'none',
-              gap: '12px',
-              paddingBottom: '4px',
+              msOverflowStyle: 'none',
             }}>
-            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+              <style>{`.training-carousel::-webkit-scrollbar { display: none; }`}</style>
               {trainingSessions.map(session => {
                 const myStatus  = trainingAvail[session.id] || null
                 const isLoading = trainingSubmitting === session.id
@@ -792,107 +791,121 @@ export default function DashboardPage() {
                 const days      = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
                 const months    = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
                 return (
-                  <div key={session.id} className="card" style={{
-                    padding: '16px 20px',
-                    border: '1px solid rgba(96,165,250,0.2)',
-                    display: 'flex', flexDirection: 'column', gap: '12px',
-                  }}>
-                    {/* Session info row */}
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                      {/* Date block */}
-                      <div style={{
-                        textAlign: 'center',
-                        paddingRight: '16px',
-                        borderRight: '1px solid var(--navy-border)',
-                        minWidth: '44px', flexShrink: 0,
-                      }}>
+                  /* Each card = 100% width so only one shows at a time — matches native FlatList pagingEnabled */
+                  <div
+                    key={session.id}
+                    className="training-carousel"
+                    style={{ flex: '0 0 100%', scrollSnapAlign: 'start', boxSizing: 'border-box' }}
+                  >
+                    <div className="card" style={{
+                      padding: '16px 20px',
+                      border: '1px solid rgba(96,165,250,0.2)',
+                      display: 'flex', flexDirection: 'column', gap: '12px',
+                    }}>
+
+                      {/* ── Top row: date block + session details ── */}
+                      <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+
+                        {/* Date block — mirrors trainingDateBlock style */}
                         <div style={{
-                          fontFamily: 'var(--font-display)', fontSize: '28px',
-                          color: SUNDAY_BLUE, lineHeight: 1,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center',
+                          paddingRight: '14px',
+                          borderRight: '1px solid var(--navy-border)',
+                          minWidth: '44px', flexShrink: 0,
                         }}>
-                          {d.getDate()}
-                        </div>
-                        <div style={{
-                          fontSize: '10px', fontWeight: 700,
-                          color: 'var(--text-muted)', letterSpacing: '1px',
-                          textTransform: 'uppercase', marginTop: '2px',
-                        }}>
-                          {days[d.getDay()]}
-                        </div>
-                      </div>
-                      {/* Details */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontWeight: 700, fontSize: '15px',
-                          color: 'var(--text-primary)', marginBottom: '6px',
-                          textTransform: 'uppercase', letterSpacing: '0.5px',
-                        }}>
-                          {session.title}
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            📅 {days[d.getDay()].toUpperCase()} {d.getDate()} {months[d.getMonth()]}
+                          <div style={{
+                            fontFamily: 'var(--font-display)', fontSize: '26px',
+                            color: SUNDAY_BLUE, lineHeight: '28px',
+                          }}>
+                            {d.getDate()}
                           </div>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            🕐 {session.session_time?.slice(0, 5)}
+                          <div style={{
+                            fontSize: '10px', fontWeight: 700,
+                            color: 'var(--text-muted)', letterSpacing: '1px',
+                            textTransform: 'uppercase', marginTop: '2px',
+                          }}>
+                            {days[d.getDay()]}
                           </div>
                         </div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                          📍 {session.venue}
+
+                        {/* Session info — mirrors trainingInfo style */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {/* Title — uppercase bold, mirrors trainingTitle */}
+                          <div style={{
+                            fontWeight: 700, fontSize: '15px',
+                            color: 'var(--text-primary)', marginBottom: '4px',
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                          }}>
+                            {session.title}
+                          </div>
+                          {/* Date + time row — mirrors trainingMetaRow */}
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#CBD5E1' }}>
+                              📅 {days[d.getDay()].toUpperCase()} {d.getDate()} {months[d.getMonth()]}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#CBD5E1' }}>
+                              🕐 {session.session_time?.slice(0, 5)}
+                            </div>
+                          </div>
+                          {/* Venue — mirrors trainingMeta */}
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#CBD5E1' }}>
+                            📍 {session.venue}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Training availability buttons */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {[
-                        { status: 'available',   label: 'Available',   color: 'var(--green)', fill: 'rgba(34,197,94,0.12)' },
-                        { status: 'unavailable', label: 'Unavailable', color: 'var(--red)',   fill: 'rgba(239,68,68,0.10)' },
-                      ].map(opt => {
-                        const isActive = myStatus === opt.status
-                        return (
-                          <button
-                            key={opt.status}
-                            onClick={() => !isLoading && setTrainingStatus(session.id, opt.status)}
-                            disabled={isLoading}
-                            style={{
-                              flex: 1,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                              paddingTop: '10px', paddingBottom: '10px',
-                              borderRadius: 'var(--radius-md)',
-                              border:     isActive ? `1px solid ${opt.color}` : '1px solid var(--navy-border)',
-                              background: isActive ? opt.fill : 'transparent',
-                              color:      isActive ? opt.color : 'var(--text-muted)',
-                              fontSize: '13px', fontWeight: isActive ? 700 : 400,
-                              cursor: isLoading ? 'not-allowed' : 'pointer',
-                              transition: 'var(--transition)',
-                            }}
-                          >
-                            <div style={{
-                              width: '8px', height: '8px', borderRadius: '50%',
-                              background: isActive ? opt.color : 'rgba(255,255,255,0.2)',
-                            }} />
-                            {opt.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Training status confirmation */}
-                    {myStatus && (
-                      <div style={{
-                        fontSize: '12px', fontWeight: 600, textAlign: 'center',
-                        color: myStatus === 'available' ? 'var(--green)' : 'var(--red)',
-                      }}>
-                        ✓ {myStatus === 'available'
-                          ? 'You are attending this session'
-                          : 'You are unavailable for this session'}
+                      {/* ── Availability buttons — mirrors trainingAvailRow ── */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {[
+                          { status: 'available',   label: 'Available',   color: '#22C55E', fill: 'rgba(34,197,94,0.12)'  },
+                          { status: 'unavailable', label: 'Unavailable', color: '#EF4444', fill: 'rgba(239,68,68,0.10)'  },
+                        ].map(opt => {
+                          const isActive = myStatus === opt.status
+                          return (
+                            <button
+                              key={opt.status}
+                              onClick={() => !isLoading && setTrainingStatus(session.id, opt.status)}
+                              disabled={isLoading}
+                              style={{
+                                flex: 1,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                paddingTop: '10px', paddingBottom: '10px',
+                                borderRadius: 'var(--radius-md)',
+                                border:     isActive ? `1px solid ${opt.color}` : '1px solid var(--navy-border)',
+                                background: isActive ? opt.fill : 'transparent',
+                                color:      isActive ? opt.color : 'var(--text-muted)',
+                                fontSize: '13px', fontWeight: isActive ? 700 : 400,
+                                cursor: isLoading ? 'not-allowed' : 'pointer',
+                                transition: 'var(--transition)',
+                              }}
+                            >
+                              <div style={{
+                                width: '8px', height: '8px', borderRadius: '50%',
+                                background: isActive ? opt.color : 'rgba(255,255,255,0.2)',
+                                flexShrink: 0,
+                              }} />
+                              {opt.label}
+                            </button>
+                          )
+                        })}
                       </div>
-                    )}
+
+                      {/* ── Status confirmation ── */}
+                      {myStatus && (
+                        <div style={{
+                          fontSize: '12px', fontWeight: 700, textAlign: 'center',
+                          color: myStatus === 'available' ? '#22C55E' : '#EF4444',
+                        }}>
+                          ✓ {myStatus === 'available'
+                            ? 'You are attending this session'
+                            : 'You are unavailable for this session'}
+                        </div>
+                      )}
+
+                    </div>
                   </div>
                 )
               })}
-            </div>
             </div>
             {/* Carousel dots */}
             {trainingSessions.length > 1 && (
