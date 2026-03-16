@@ -85,6 +85,19 @@ export default function AdminMembersPage() {
       return
     }
 
+    // 'rejected' is NOT a valid Supabase enum — branch before hitting the DB
+    if (newRole === 'rejected') {
+      // Delete the profile row entirely instead of setting an invalid role
+      const { error: deleteErr } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', memberId)
+      if (deleteErr) { toast.error('Failed to reject: ' + deleteErr.message); return }
+      toast(`${memberName}'s application rejected`, { icon: '❌' })
+      setMembers(prev => prev.filter(m => m.id !== memberId))
+      return
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({ role: newRole })
@@ -92,13 +105,8 @@ export default function AdminMembersPage() {
 
     if (error) { toast.error('Failed to update role: ' + error.message); return }
 
-    if (newRole === 'rejected') {
-      toast(`${memberName}'s application rejected`, { icon: '❌' })
-      setMembers(prev => prev.filter(m => m.id !== memberId))
-    } else {
-      toast.success(`${memberName} is now ${newRole}`)
-      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
-    }
+    toast.success(`${memberName} is now ${newRole}`)
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
   }
 
   // ── Assign member to team ──

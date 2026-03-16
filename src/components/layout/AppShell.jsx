@@ -25,7 +25,7 @@ export default function AppShell({ children }) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-      <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <Navbar />
       <main className="app-main" style={{ minHeight: 'calc(100vh - 64px)' }}>
         {children}
       </main>

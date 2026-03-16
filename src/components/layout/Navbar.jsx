@@ -93,17 +93,17 @@ export default function Navbar() {
         {/* ── Left: Pavilion app identity ── */}
         <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <img
-            src="/assets/icons/pavilion-icon.svg"
-            alt="Pavilion"
-            className="navbar-pavilion-icon"
-            style={{
-              width: '38px',
-              height: '38px',
-              objectFit: 'contain',
-              borderRadius: '10px',
-              flexShrink: 0,
-            }}
-          />
+          src="/assets/images/pavilion-icon.png"
+          alt="Pavilion"
+          className="navbar-pavilion-icon"
+          style={{
+            width: '38px',
+            height: '38px',
+            objectFit: 'contain',
+            borderRadius: '10px',
+            flexShrink: 0,
+          }}
+        />
           <div className="navbar-pavilion-text" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{
               fontFamily: 'var(--font-display)',

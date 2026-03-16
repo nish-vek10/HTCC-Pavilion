@@ -44,7 +44,7 @@ export default function LandingPage() {
         {/* ── Left: Pavilion icon + app name ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <img
-            src="/assets/icons/pavilion-icon.svg"
+            src="/assets/images/pavilion-icon.png"
             alt="Pavilion"
             style={{ width: '36px', height: '36px', borderRadius: '10px' }}
           />
