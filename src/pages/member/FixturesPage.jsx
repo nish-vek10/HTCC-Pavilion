@@ -3,10 +3,20 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO, isPast } from 'date-fns'
+import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 import { AVAILABILITY_CONFIG, MATCH_TYPE_LABELS } from '../../lib/constants.js'
+
+// ── toLocalISO — avoids UTC/BST off-by-one (never use .toISOString()) ─────────
+function toLocalISO(d) {
+  const year  = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day   = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 // ─── CONFIGURABLE ─────────────────────────────────
 const ALL = 'all'
@@ -35,13 +45,68 @@ export default function FixturesPage() {
   // ── Teams I belong to ──
   const [myTeams, setMyTeams] = useState([])
 
+  // ── Training sessions ──────────────────────────────────────────────────────
+  const [trainingSessions,   setTrainingSessions]   = useState([])
+  const [trainingAvail,      setTrainingAvail]      = useState({})
+  const [trainingSubmitting, setTrainingSubmitting] = useState(null)
+  const [trainingModal,      setTrainingModal]      = useState(null) // session or null
+
   useEffect(() => { document.title = 'Pavilion · Fixtures' }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([fetchFixtures(), fetchMyAvailability()])
+    await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchTrainingSessions()])
     setLoading(false)
+  }
+
+  // ── Fetch upcoming training sessions + my responses ───────────────────────
+  const fetchTrainingSessions = async () => {
+    const today = toLocalISO(new Date())
+    const { data: sessions } = await supabase
+      .from('training_sessions')
+      .select('*')
+      .gte('session_date', today)
+      .order('session_date', { ascending: true })
+      .limit(8)
+    if (!sessions) return
+    setTrainingSessions(sessions)
+
+    if (sessions.length > 0) {
+      const { data: avail } = await supabase
+        .from('training_availability')
+        .select('session_id, status')
+        .eq('player_id', profile.id)
+        .in('session_id', sessions.map(s => s.id))
+      const map = {}
+      avail?.forEach(a => { map[a.session_id] = a.status })
+      setTrainingAvail(map)
+    }
+  }
+
+  // ── Set / toggle off training availability ────────────────────────────────
+  const setTrainingStatus = async (sessionId, status) => {
+    setTrainingSubmitting(sessionId)
+    try {
+      const existing = trainingAvail[sessionId]
+      if (existing === status) {
+        await supabase.from('training_availability').delete()
+          .eq('session_id', sessionId).eq('player_id', profile.id)
+        setTrainingAvail(prev => { const n = { ...prev }; delete n[sessionId]; return n })
+      } else if (existing) {
+        await supabase.from('training_availability').update({ status })
+          .eq('session_id', sessionId).eq('player_id', profile.id)
+        setTrainingAvail(prev => ({ ...prev, [sessionId]: status }))
+      } else {
+        await supabase.from('training_availability').insert({ session_id: sessionId, player_id: profile.id, status })
+        setTrainingAvail(prev => ({ ...prev, [sessionId]: status }))
+      }
+      setTrainingModal(null)
+    } catch (err) {
+      toast.error('Failed to update training availability')
+    } finally {
+      setTrainingSubmitting(null)
+    }
   }
 
   const fetchFixtures = async () => {
@@ -157,7 +222,10 @@ export default function FixturesPage() {
             { label: 'Responded', value: totalResponded, color: 'var(--green)'       },
             { label: 'Available', value: totalAvailable, color: 'var(--green)'       },
           ].map(s => (
-            <div key={s.label} className="card" style={{ padding: '18px 20px' }}>
+            <div key={s.label} className="card" style={{
+              padding: '18px 20px',
+              borderTop: `3px solid ${s.color}`,
+            }}>
               <div style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: '34px', letterSpacing: '1px',
@@ -171,6 +239,239 @@ export default function FixturesPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Upcoming training sessions strip — mirrors native FixturesScreen ── */}
+        {!loading && trainingSessions.length > 0 && (
+          <div style={{ marginBottom: '28px' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: '10px',
+            }}>
+              <div style={{
+                fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                color: '#60A5FA', textTransform: 'uppercase',
+              }}>
+                Upcoming Training
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, opacity: 0.7 }}>
+                Tap to set availability
+              </div>
+            </div>
+            {/* Horizontal scroll strip — one card per session, peeks next */}
+            <div style={{
+              display: 'flex', gap: '10px',
+              overflowX: 'auto', scrollbarWidth: 'none',
+              msOverflowStyle: 'none', paddingBottom: '4px',
+            }}>
+              <style>{`.training-strip::-webkit-scrollbar { display: none; }`}</style>
+              {trainingSessions.map(session => {
+                const myStatus = trainingAvail[session.id] || null
+                const d        = new Date(session.session_date + 'T00:00:00')
+                const days     = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                const months   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+                const dotColor = myStatus === 'available' ? '#22C55E'
+                  : myStatus === 'unavailable' ? '#EF4444' : null
+                return (
+                  <div
+                    key={session.id}
+                    className="training-strip"
+                    onClick={() => setTrainingModal(session)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                      flexShrink: 0, cursor: 'pointer',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid rgba(96,165,250,0.2)',
+                      borderLeft: '3px solid #60A5FA',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 14px',
+                      minWidth: '240px', maxWidth: '300px',
+                      transition: 'var(--transition)',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(96,165,250,0.5)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(96,165,250,0.2)'}
+                  >
+                    {/* Date block */}
+                    <div style={{ textAlign: 'center', minWidth: '36px' }}>
+                      <div style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: '26px', color: '#60A5FA', lineHeight: '28px',
+                      }}>
+                        {d.getDate()}
+                      </div>
+                      <div style={{
+                        fontSize: '9px', fontWeight: 700, letterSpacing: '1px',
+                        color: 'var(--text-muted)', textTransform: 'uppercase',
+                      }}>
+                        {days[d.getDay()]}
+                      </div>
+                    </div>
+                    {/* Divider */}
+                    <div style={{ width: '1px', alignSelf: 'stretch', background: 'rgba(96,165,250,0.15)' }} />
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
+                        color: '#60A5FA', marginBottom: '3px',
+                      }}>
+                        {days[d.getDay()].toUpperCase()} {d.getDate()} {months[d.getMonth()].toUpperCase()}
+                      </div>
+                      <div style={{
+                        fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)',
+                        marginBottom: '3px', textTransform: 'uppercase',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {session.title}
+                      </div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#CBD5E1' }}>
+                        🕐 {session.session_time?.slice(0, 5)}
+                      </div>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 600, color: '#CBD5E1',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        📍 {session.venue}
+                      </div>
+                    </div>
+                    {/* Availability dot */}
+                    <div style={{
+                      width: '12px', height: '12px', borderRadius: '50%', flexShrink: 0,
+                      background: dotColor || 'transparent',
+                      border: dotColor ? 'none' : '1.5px solid rgba(255,255,255,0.2)',
+                      boxShadow: dotColor ? `0 0 6px ${dotColor}` : 'none',
+                    }} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Training availability modal ── */}
+        {trainingModal && (
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={() => setTrainingModal(null)}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 400,
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)',
+              }}
+            />
+            {/* Bottom sheet */}
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 401,
+              background: 'var(--bg-surface)',
+              borderTop: '1px solid rgba(96,165,250,0.2)',
+              borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
+              padding: '12px 24px 48px',
+              animation: 'slide-up-sheet 0.25s ease forwards',
+            }}>
+              <style>{`
+                @keyframes slide-up-sheet {
+                  from { transform: translateY(100%); opacity: 0; }
+                  to   { transform: translateY(0);    opacity: 1; }
+                }
+              `}</style>
+              {/* Handle */}
+              <div style={{
+                width: '36px', height: '4px', borderRadius: '2px',
+                background: 'var(--navy-border)',
+                margin: '0 auto 20px',
+              }} />
+              {/* Label */}
+              <div style={{
+                fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                color: '#60A5FA', marginBottom: '6px',
+              }}>
+                TRAINING SESSION
+              </div>
+              {/* Title */}
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '22px', letterSpacing: '1px',
+                color: 'var(--text-primary)', marginBottom: '8px',
+              }}>
+                {trainingModal.title?.toUpperCase()}
+              </div>
+              {/* Meta */}
+              {(() => {
+                const d      = new Date(trainingModal.session_date + 'T00:00:00')
+                const days   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1', marginBottom: '4px' }}>
+                      📅 {days[d.getDay()]} {d.getDate()} {months[d.getMonth()]}
+                      {'      '}
+                      🕐 {trainingModal.session_time?.slice(0, 5)}
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#CBD5E1' }}>
+                      📍 {trainingModal.venue}
+                    </div>
+                  </div>
+                )
+              })()}
+              {/* Availability buttons */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                {[
+                  { status: 'available',   label: 'Available',   color: '#22C55E', fill: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.35)'  },
+                  { status: 'unavailable', label: 'Unavailable', color: '#EF4444', fill: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.3)'   },
+                ].map(opt => {
+                  const isActive     = trainingAvail[trainingModal?.id] === opt.status
+                  const isSubmitting = trainingSubmitting === trainingModal?.id
+                  return (
+                    <button
+                      key={opt.status}
+                      onClick={() => setTrainingStatus(trainingModal.id, opt.status)}
+                      disabled={isSubmitting}
+                      style={{
+                        flex: 1, padding: '14px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${isActive ? opt.border : 'var(--navy-border)'}`,
+                        background: isActive ? opt.fill : 'transparent',
+                        color: isActive ? opt.color : 'var(--text-muted)',
+                        fontSize: '14px', fontWeight: isActive ? 700 : 400,
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        transition: 'var(--transition)',
+                      }}
+                    >
+                      <div style={{
+                        width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
+                        background: isActive ? opt.color : 'rgba(255,255,255,0.2)',
+                      }} />
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Status confirmation */}
+              {trainingModal && trainingAvail[trainingModal.id] && (
+                <div style={{
+                  fontSize: '13px', fontWeight: 700, textAlign: 'center', marginBottom: '14px',
+                  color: trainingAvail[trainingModal.id] === 'available' ? '#22C55E' : '#EF4444',
+                }}>
+                  ✓ You are {trainingAvail[trainingModal.id] === 'available' ? 'attending' : 'unavailable for'} this session
+                </div>
+              )}
+              {/* Close */}
+              <button
+                onClick={() => setTrainingModal(null)}
+                style={{
+                  width: '100%', padding: '13px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--navy-border)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
 
         {/* ── Filters ── */}
         <div style={{ marginBottom: '28px' }}>
@@ -275,8 +576,8 @@ export default function FixturesPage() {
 
         {/* ── Fixtures list ── */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-            Loading fixtures…
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <ClubLoader message="Loading fixtures…" size={64} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="card" style={{ padding: '60px', textAlign: 'center' }}>
