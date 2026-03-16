@@ -50,6 +50,7 @@ export default function FixturesPage() {
   const [trainingAvail,      setTrainingAvail]      = useState({})
   const [trainingSubmitting, setTrainingSubmitting] = useState(null)
   const [trainingModal,      setTrainingModal]      = useState(null) // session or null
+  const [filterModalOpen,    setFilterModalOpen]    = useState(false)
 
   useEffect(() => { document.title = 'Pavilion · Fixtures' }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -190,6 +191,13 @@ export default function FixturesPage() {
   const hasActiveFilters =
     teamFilter !== ALL || typeFilter !== ALL ||
     homeAwayFilter !== ALL || periodFilter !== 'upcoming'
+
+  // Count of active sub-filters (excludes period — that lives in the toggle)
+  const activeFilterCount = [
+    teamFilter     !== ALL,
+    homeAwayFilter !== ALL,
+    typeFilter     !== ALL,
+  ].filter(Boolean).length
 
   return (
     <AppShell>
@@ -473,36 +481,33 @@ export default function FixturesPage() {
           </>
         )}
 
-        {/* ── Filters ── */}
-        <div style={{ marginBottom: '28px' }}>
-        <div className="filter-scroll-x" style={{
-          display: 'flex', flexWrap: 'nowrap', gap: '10px',
-          marginBottom: '8px', alignItems: 'center',
-        }}>
+        {/* ── Filter row: period toggle + Filters button — mirrors native exactly ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
 
-          {/* Period toggle */}
+          {/* Period toggle — Upcoming | Past | All */}
           <div style={{
-            display: 'flex', borderRadius: 'var(--radius-full)',
+            display: 'flex', flexShrink: 0,
+            borderRadius: 'var(--radius-full)',
             border: '1px solid var(--navy-border)',
-            overflow: 'hidden', flexShrink: 0,
+            overflow: 'hidden',
           }}>
             {[
               { key: 'upcoming', label: 'Upcoming' },
               { key: 'past',     label: 'Past'     },
               { key: 'all',      label: 'All'      },
-            ].map(opt => (
+            ].map((opt, i, arr) => (
               <button
                 key={opt.key}
                 onClick={() => setPeriodFilter(opt.key)}
                 style={{
-                  padding: '8px 16px', border: 'none',
+                  padding: '9px 16px', border: 'none',
                   background: periodFilter === opt.key
-                    ? 'rgba(245,197,24,0.15)'
-                    : 'transparent',
+                    ? 'rgba(245,197,24,0.12)' : 'transparent',
                   color: periodFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
                   fontSize: '13px', fontWeight: periodFilter === opt.key ? 700 : 400,
                   cursor: 'pointer', transition: 'var(--transition)',
-                  borderRight: '1px solid var(--navy-border)',
+                  borderRight: i < arr.length - 1 ? '1px solid var(--navy-border)' : 'none',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {opt.label}
@@ -510,69 +515,217 @@ export default function FixturesPage() {
             ))}
           </div>
 
-          {/* Team filter */}
-          {myTeams.length > 1 && (
-            <select
-              value={teamFilter}
-              onChange={e => setTeamFilter(e.target.value)}
-              className="input"
-              style={{ width: 'auto', minWidth: '130px', fontSize: '13px', padding: '8px 12px' }}
-            >
-              <option value={ALL}>All Teams</option>
-              {myTeams.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          )}
-
-          {/* Match type filter */}
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="input"
-            style={{ width: 'auto', minWidth: '130px', fontSize: '13px', padding: '8px 12px' }}
+          {/* ⚙ Filters button — opens bottom sheet modal */}
+          <button
+            onClick={() => setFilterModalOpen(true)}
+            style={{
+              flex: 1, padding: '9px 16px',
+              borderRadius: 'var(--radius-full)',
+              border: activeFilterCount > 0
+                ? '1px solid rgba(245,197,24,0.4)'
+                : '1px solid var(--navy-border)',
+              background: activeFilterCount > 0
+                ? 'rgba(245,197,24,0.06)' : 'transparent',
+              color: activeFilterCount > 0 ? 'var(--gold)' : 'var(--text-muted)',
+              fontSize: '13px', fontWeight: activeFilterCount > 0 ? 700 : 400,
+              cursor: 'pointer', transition: 'var(--transition)',
+              textAlign: 'center',
+            }}
           >
-            <option value={ALL}>All Types</option>
-            {matchTypes.map(type => (
-              <option key={type} value={type}>{MATCH_TYPE_LABELS[type] || type}</option>
-            ))}
-          </select>
+            ⚙ Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </button>
 
-          {/* Home / Away filter */}
-          <select
-            value={homeAwayFilter}
-            onChange={e => setHomeAwayFilter(e.target.value)}
-            className="input"
-            style={{ width: 'auto', minWidth: '130px', fontSize: '13px', padding: '8px 12px' }}
-          >
-            <option value={ALL}>Home & Away</option>
-            <option value="home">🏠 Home</option>
-            <option value="away">✈️ Away</option>
-            <option value="neutral">⚖️ Neutral</option>
-          </select>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
+          {/* ✕ Clear button — only shown when filters active */}
+          {activeFilterCount > 0 && (
             <button
-              onClick={clearFilters}
+              onClick={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
               style={{
-                padding: '8px 14px', borderRadius: 'var(--radius-full)',
+                width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
                 border: '1px solid rgba(239,68,68,0.3)',
                 background: 'rgba(239,68,68,0.06)',
-                color: 'var(--red)', fontSize: '13px',
-                cursor: 'pointer', transition: 'var(--transition)',
+                color: 'var(--red)', fontSize: '13px', fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
-              ✕ Clear
+              ✕
             </button>
           )}
+        </div>
 
-          </div>
-        {/* Result count — outside scroll row so it's always visible */}
-        <div style={{ fontSize: '12px', color: 'var(--text-faint)', textAlign: 'right' }}>
+        {/* Result count */}
+        <div style={{ fontSize: '12px', color: 'var(--text-faint)', textAlign: 'right', marginBottom: '24px' }}>
           {filtered.length} fixture{filtered.length !== 1 ? 's' : ''}
         </div>
-        </div>
+
+        {/* ── Filter bottom sheet modal — 3 columns: Venue / Team / Type ── */}
+        {filterModalOpen && (
+          <>
+            <div
+              onClick={() => setFilterModalOpen(false)}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 400,
+                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+              }}
+            />
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 401,
+              background: 'var(--bg-surface)',
+              borderTop: '1px solid rgba(245,197,24,0.15)',
+              borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
+              padding: '12px 24px 48px',
+              animation: 'slide-up-sheet 0.25s ease forwards',
+            }}>
+              {/* Handle */}
+              <div style={{
+                width: '36px', height: '4px', borderRadius: '2px',
+                background: 'var(--navy-border)', margin: '0 auto 20px',
+              }} />
+              {/* Header */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', marginBottom: '24px',
+              }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '22px', letterSpacing: '3px', color: 'var(--text-primary)',
+                }}>
+                  FILTERS
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontSize: '13px', color: 'var(--red)', fontWeight: 600,
+                    }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              {/* 3 columns — matches native modal exactly */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
+
+                {/* Column 1: Venue */}
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
+                  }}>
+                    Venue
+                  </div>
+                  {[
+                    { key: ALL,       label: 'ALL'     },
+                    { key: 'home',    label: 'HOME'    },
+                    { key: 'away',    label: 'AWAY'    },
+                    { key: 'neutral', label: 'NEUTRAL' },
+                  ].map(opt => (
+                    <button key={opt.key}
+                      onClick={() => setHomeAwayFilter(opt.key)}
+                      style={{
+                        display: 'block', width: '100%',
+                        padding: '10px 12px', marginBottom: '8px',
+                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                        border: homeAwayFilter === opt.key
+                          ? '1px solid rgba(245,197,24,0.4)'
+                          : '1px solid var(--navy-border)',
+                        background: homeAwayFilter === opt.key
+                          ? 'rgba(245,197,24,0.08)' : 'transparent',
+                        color: homeAwayFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
+                        fontSize: '12px', fontWeight: homeAwayFilter === opt.key ? 700 : 400,
+                        textAlign: 'center', transition: 'var(--transition)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Column 2: Team */}
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
+                  }}>
+                    Team
+                  </div>
+                  {[{ id: ALL, name: 'ALL' }, ...myTeams].map(t => (
+                    <button key={t.id}
+                      onClick={() => setTeamFilter(t.id)}
+                      style={{
+                        display: 'block', width: '100%',
+                        padding: '10px 12px', marginBottom: '8px',
+                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                        border: teamFilter === t.id
+                          ? '1px solid rgba(245,197,24,0.4)'
+                          : '1px solid var(--navy-border)',
+                        background: teamFilter === t.id
+                          ? 'rgba(245,197,24,0.08)' : 'transparent',
+                        color: teamFilter === t.id ? 'var(--gold)' : 'var(--text-muted)',
+                        fontSize: '12px', fontWeight: teamFilter === t.id ? 700 : 400,
+                        textAlign: 'center', transition: 'var(--transition)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.name.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Column 3: Type */}
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                    color: 'var(--gold)', marginBottom: '10px', textTransform: 'uppercase',
+                  }}>
+                    Type
+                  </div>
+                  {[
+                    { key: ALL,          label: 'ALL'      },
+                    { key: 'league',     label: 'MCCL'     },
+                    { key: 'cup',        label: 'CUP'      },
+                    { key: 'friendly',   label: 'FRIENDLY' },
+                    { key: 'sunday_comp',label: 'CVSL'     },
+                  ].map(opt => (
+                    <button key={opt.key}
+                      onClick={() => setTypeFilter(opt.key)}
+                      style={{
+                        display: 'block', width: '100%',
+                        padding: '10px 12px', marginBottom: '8px',
+                        borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                        border: typeFilter === opt.key
+                          ? '1px solid rgba(245,197,24,0.4)'
+                          : '1px solid var(--navy-border)',
+                        background: typeFilter === opt.key
+                          ? 'rgba(245,197,24,0.08)' : 'transparent',
+                        color: typeFilter === opt.key ? 'var(--gold)' : 'var(--text-muted)',
+                        fontSize: '12px', fontWeight: typeFilter === opt.key ? 700 : 400,
+                        textAlign: 'center', transition: 'var(--transition)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Apply button */}
+              <button
+                onClick={() => setFilterModalOpen(false)}
+                style={{
+                  width: '100%', padding: '15px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--gold)', color: 'var(--navy)',
+                  fontSize: '15px', fontWeight: 700,
+                  border: 'none', cursor: 'pointer',
+                }}
+              >
+                Apply Filters
+              </button>
+            </div>
+          </>
+        )}
 
         {/* ── Fixtures list ── */}
         {loading ? (
@@ -610,13 +763,16 @@ export default function FixturesPage() {
             return Object.entries(grouped).map(([month, monthFixtures]) => (
               <div key={month} style={{ marginBottom: '36px' }}>
 
-                {/* Month divider */}
+                {/* Month header — sticky as you scroll, matches native stickyHeaderIndices */}
                 <div style={{
+                  position: 'sticky', top: '64px', zIndex: 10,
                   fontSize: '12px', fontWeight: 700, letterSpacing: '2px',
                   textTransform: 'uppercase', color: 'var(--gold)',
                   marginBottom: '14px', paddingBottom: '10px',
+                  paddingTop: '10px',
                   borderBottom: '1px solid var(--navy-border)',
                   display: 'flex', justifyContent: 'space-between',
+                  background: 'var(--bg-primary)',
                 }}>
                   <span>{month}</span>
                   <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>
