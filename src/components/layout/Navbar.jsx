@@ -160,16 +160,15 @@ export default function Navbar() {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
               <span className="navbar-htcc-text-primary" style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '24px', letterSpacing: '3px',
-                color: '#F5C518', lineHeight: '16px',
+                fontSize: '18px', letterSpacing: '0.1em',
+                color: '#F5C518', lineHeight: 1,
               }}>
                 HARROW TOWN
               </span>
               <span className="navbar-htcc-text-secondary" style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '16px', letterSpacing: '6px',
-                color: '#8B9BB4', lineHeight: '14px',
-                marginTop: '2px',
+                fontFamily: 'var(--font-body)',
+                fontSize: '10px', fontWeight: 400,
+                letterSpacing: '0.3em', color: '#8B9BB4', lineHeight: 1,
               }}>
                 CRICKET CLUB
               </span>
