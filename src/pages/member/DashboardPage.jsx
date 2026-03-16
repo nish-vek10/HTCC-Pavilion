@@ -642,6 +642,7 @@ export default function DashboardPage() {
             fontFamily: 'var(--font-display)',
             fontSize: 'clamp(32px, 5vw, 52px)',
             letterSpacing: '2px', lineHeight: 1, marginBottom: '8px',
+            color: 'var(--gold)',
           }}>
             {profile?.full_name?.split(' ')[0].toUpperCase() || 'PLAYER'} 🏏
           </h1>
@@ -689,8 +690,12 @@ export default function DashboardPage() {
           <div style={{ marginBottom: '40px' }}>
             <div className="section-label">Club News</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
-              <div className="section-title" style={{ fontSize: '24px', marginBottom: 0 }}>
-                Announcements
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '26px', letterSpacing: '1px',
+                color: 'var(--text-primary)', marginBottom: 0,
+              }}>
+                ANNOUNCEMENTS
               </div>
               {announcements.length > 1 && (
                 <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -704,10 +709,14 @@ export default function DashboardPage() {
                   <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginBottom: '6px' }}>
                     {format(parseISO(ann.created_at), 'EEE, d MMM yyyy')}
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  <div style={{
+                    fontWeight: 700, fontSize: '14px',
+                    color: 'var(--text-primary)', marginBottom: '6px',
+                    textTransform: 'uppercase', letterSpacing: '0.3px',
+                  }}>
                     {ann.title}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '13px', color: '#CBD5E1', lineHeight: 1.7 }}>
                     {ann.body}
                   </div>
                 </div>
@@ -721,8 +730,12 @@ export default function DashboardPage() {
           <div style={{ marginBottom: '40px' }}>
             <div className="section-label">Upcoming Training</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
-              <div className="section-title" style={{ fontSize: '24px', marginBottom: 0 }}>
-                Training Sessions
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '26px', letterSpacing: '1px',
+                color: 'var(--text-primary)', marginBottom: 0,
+              }}>
+                SESSIONS
               </div>
               {trainingSessions.length > 1 && (
                 <div style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 600, whiteSpace: 'nowrap' }}>
