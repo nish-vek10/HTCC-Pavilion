@@ -1,6 +1,7 @@
 // pavilion-web/src/pages/member/TeamsPage.jsx
 
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -238,6 +239,7 @@ export default function TeamsPage() {
   }
 
   return (
+    <>
     <AppShell>
       <div className="page-inner" style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
 
@@ -721,7 +723,11 @@ export default function TeamsPage() {
         )}
       </div>
 
-      {/* ── Join request confirmation modal ── */}
+      </AppShell>
+
+    {/* ── Join request confirmation modal — portalled to body to escape
+        AppShell's page-fade-in transform stacking context ── */}
+    {joinModal.open && createPortal(
       <ConfirmModal
         isOpen={joinModal.open}
         title="Request to Join"
@@ -731,7 +737,9 @@ export default function TeamsPage() {
         confirmDanger={false}
         onConfirm={handleJoinRequest}
         onCancel={() => setJoinModal({ open: false, team: null })}
-      />
-    </AppShell>
+      />,
+      document.body
+    )}
+  </>
   )
 }
