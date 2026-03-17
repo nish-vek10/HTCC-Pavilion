@@ -444,131 +444,152 @@ export default function AdminFixturesPage() {
                   const isEditing   = editingId === fixture.id
 
                   return (
-                    <div key={fixture.id}
-                      className="card card--hoverable"
-                      style={{
-                        padding: '16px 20px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: isEditing ? '1px solid rgba(245,197,24,0.4)' : undefined,
-                      }}
-                    >
-                      {/* Date block */}
-                      <div style={{
-                        width: '48px', textAlign: 'center', flexShrink: 0,
-                        borderRight: '1px solid var(--navy-border)',
-                        paddingRight: '18px', marginRight: '18px',
-                      }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: 'var(--gold)', lineHeight: 1 }}>
-                          {format(parseISO(fixture.match_date), 'dd')}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '1px' }}>
-                          {format(parseISO(fixture.match_date), 'EEE').toUpperCase()}
-                        </div>
-                      </div>
+                    // ── Native card structure: top (date + info) / bottom (action row)
+                    // Mirrors AdminFixturesScreen fixtureCard exactly
+                    <div key={fixture.id} style={{
+                      background: 'var(--bg-surface)',
+                      border: isEditing
+                        ? '1px solid rgba(245,197,24,0.4)'
+                        : '1px solid var(--navy-border)',
+                      borderRadius: 'var(--radius-md)',
+                      overflow: 'hidden',
+                      marginBottom: '0',
+                    }}>
 
-                      {/* Match info */}
-                      <div style={{ flex: 1 }}>
-                        {/* Tags: Team · Home/Away · Match Type */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                          {/* Team badge */}
-                          <span style={{
-                            fontSize: '11px', fontWeight: 700, letterSpacing: '1px',
-                            color: 'var(--gold)', background: 'rgba(245,197,24,0.1)',
-                            padding: '2px 8px', borderRadius: '4px',
-                            border: '1px solid rgba(245,197,24,0.2)',
+                      {/* ── Top: date block + fixture info — mirrors fixtureCardTop ── */}
+                      <div style={{ display: 'flex', gap: '14px', padding: '14px 16px' }}>
+
+                        {/* Date block — mirrors fixtureDateBlock */}
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center',
+                          justifyContent: 'center', flexShrink: 0,
+                          paddingRight: '14px', minWidth: '44px',
+                          borderRight: '1px solid var(--navy-border)',
+                        }}>
+                          <div style={{
+                            fontFamily: 'var(--font-display)',
+                            fontSize: '26px', color: 'var(--gold)', lineHeight: '28px',
                           }}>
-                            {fixture.teams?.name}
-                          </span>
-                          {/* Home/Away badge — standard */}
-                          <span style={{
-                            fontSize: '11px', fontWeight: 700,
-                            color: fixture.home_away === 'home' ? 'var(--green)' : fixture.home_away === 'away' ? '#60A5FA' : 'var(--text-muted)',
-                            background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : fixture.home_away === 'away' ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.04)',
-                            border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : fixture.home_away === 'away' ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
-                            padding: '2px 8px', borderRadius: '4px',
+                            {format(parseISO(fixture.match_date), 'dd')}
+                          </div>
+                          <div style={{
+                            fontWeight: 700, fontSize: '10px',
+                            color: 'var(--text-muted)', letterSpacing: '1px',
                           }}>
-                            {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
-                          </span>
-                          {/* Match type badge */}
-                          <span style={{
-                            fontSize: '11px', color: 'var(--text-muted)',
-                            background: 'rgba(255,255,255,0.04)',
-                            padding: '2px 8px', borderRadius: '4px',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                          }}>
-                            {MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}
-                          </span>
-                          {isPublished && (
+                            {format(parseISO(fixture.match_date), 'EEE').toUpperCase()}
+                          </div>
+                        </div>
+
+                        {/* Fixture info — mirrors fixtureInfo */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {/* Tag row */}
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '6px' }}>
                             <span style={{
-                              fontSize: '11px', fontWeight: 700, color: 'var(--green)',
-                              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
-                              padding: '2px 8px', borderRadius: '4px',
+                              fontWeight: 700, fontSize: '10px', letterSpacing: '0.5px',
+                              color: 'var(--gold)', background: 'rgba(245,197,24,0.1)',
+                              padding: '2px 7px', borderRadius: '4px',
+                              border: '1px solid rgba(245,197,24,0.2)',
                             }}>
-                              ✓ SQUAD OUT
+                              {fixture.teams?.name}
                             </span>
-                          )}
-                        </div>
+                            <span style={{
+                              fontWeight: 700, fontSize: '10px',
+                              color: fixture.home_away === 'home' ? '#22C55E' : '#60A5FA',
+                              background: fixture.home_away === 'home' ? 'rgba(34,197,94,0.1)' : 'rgba(96,165,250,0.1)',
+                              border: fixture.home_away === 'home' ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(96,165,250,0.25)',
+                              padding: '2px 7px', borderRadius: '4px',
+                            }}>
+                              {fixture.home_away === 'home' ? '🏠 HOME' : fixture.home_away === 'away' ? '✈️ AWAY' : '⚖️ NEUTRAL'}
+                            </span>
+                            {isPublished && (
+                              <span style={{
+                                fontWeight: 700, fontSize: '10px', color: '#22C55E',
+                                background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+                                padding: '2px 7px', borderRadius: '4px',
+                              }}>
+                                ✓ SQUAD
+                              </span>
+                            )}
+                          </div>
 
-                        <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>
-                          HTCC{' '}
-                          <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', letterSpacing: '1px' }}>VS</span>
-                          {' '}{fixture.opponent.toUpperCase()}
-                        </div>
+                          {/* Match title — mirrors fixtureTitle */}
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '3px' }}>
+                            HTCC{' '}
+                            <span style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)' }}>VS</span>
+                            {' '}{fixture.opponent.toUpperCase()}
+                          </div>
 
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '3px', display: 'flex', gap: '14px' }}>
-                          <span>📍 {fixture.venue}</span>
-                          <span>🕐 {fixture.match_time?.slice(0, 5)}</span>
+                          <div style={{ fontWeight: 600, fontSize: '11px', color: '#CBD5E1', marginBottom: '2px' }}>
+                            📍 {fixture.venue}
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: '11px', color: '#CBD5E1' }}>
+                            🕐 {fixture.match_time?.slice(0, 5)}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                      {/* ── Action row — mirrors native actionRow exactly ── */}
+                      <div style={{
+                        display: 'flex', gap: '6px',
+                        padding: '8px 10px',
+                        borderTop: '1px solid var(--navy-border)',
+                      }}>
+                        {/* Select/View Squad — flex:2, gold, matches squadBtn */}
                         <button
-                        onClick={() => navigate('/captain/fixtures/' + fixture.id + '/squad')}
-                        className="btn btn--primary"
-                        style={{ fontSize: '13px', padding: '7px 14px' }}
-                      >
-                        {isPublished ? '👁 View Squad' : '🏏 Select Squad'}
-                      </button>
-
-                      {/* Reminder — upcoming fixtures only */}
-                      {new Date(fixture.match_date) >= new Date(new Date().toDateString()) && (
-                        <button
-                          onClick={() => handleSendReminder(fixture)}
-                          disabled={reminding === fixture.id}
+                          onClick={() => navigate('/captain/fixtures/' + fixture.id + '/squad')}
                           style={{
-                            padding: '7px 14px', borderRadius: 'var(--radius-md)',
-                            background: 'rgba(96,165,250,0.08)',
-                            border: '1px solid rgba(96,165,250,0.25)',
-                            color: '#60A5FA', fontSize: '13px', fontWeight: 600,
-                            cursor: reminding === fixture.id ? 'not-allowed' : 'pointer',
-                            transition: 'var(--transition)', opacity: reminding === fixture.id ? 0.6 : 1,
+                            flex: 2, padding: '9px 0',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--gold)', border: 'none',
+                            color: 'var(--navy)', fontSize: '12px', fontWeight: 700,
+                            cursor: 'pointer', transition: 'var(--transition)',
                           }}
                         >
-                          {reminding === fixture.id ? 'Sending…' : '🔔 Remind'}
+                          {isPublished ? '👁 View Squad' : '🏏 Select Squad'}
                         </button>
-                      )}
 
-                      <button
-                        onClick={() => handleEdit(fixture)}
+                        {/* Bell reminder — matches remindBtn */}
+                        {new Date(fixture.match_date) >= new Date(new Date().toDateString()) && (
+                          <button
+                            onClick={() => handleSendReminder(fixture)}
+                            disabled={reminding === fixture.id}
+                            style={{
+                              padding: '9px 12px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(96,165,250,0.1)',
+                              border: '1px solid rgba(96,165,250,0.25)',
+                              fontSize: '14px', cursor: reminding === fixture.id ? 'not-allowed' : 'pointer',
+                              opacity: reminding === fixture.id ? 0.6 : 1,
+                            }}
+                          >
+                            {reminding === fixture.id ? '…' : '🔔'}
+                          </button>
+                        )}
+
+                        {/* Edit — matches editBtn */}
+                        <button
+                          onClick={() => handleEdit(fixture)}
                           style={{
-                            padding: '7px 14px', borderRadius: 'var(--radius-md)',
+                            flex: 1, padding: '9px 0',
+                            borderRadius: 'var(--radius-sm)',
                             background: isEditing ? 'rgba(245,197,24,0.15)' : 'rgba(245,197,24,0.08)',
                             border: isEditing ? '1px solid rgba(245,197,24,0.5)' : '1px solid rgba(245,197,24,0.25)',
-                            color: 'var(--gold)', fontSize: '13px', fontWeight: 600,
+                            color: 'var(--gold)', fontSize: '12px', fontWeight: 700,
                             cursor: 'pointer', transition: 'var(--transition)',
                           }}
                         >
                           {isEditing ? 'Editing…' : 'Edit'}
                         </button>
 
+                        {/* Delete — matches deleteBtn */}
                         <button
                           onClick={() => promptDelete(fixture.id, fixture.opponent)}
                           style={{
-                            padding: '7px 14px', borderRadius: 'var(--radius-md)',
+                            flex: 1, padding: '9px 0',
+                            borderRadius: 'var(--radius-sm)',
                             background: 'rgba(239,68,68,0.08)',
                             border: '1px solid rgba(239,68,68,0.2)',
-                            color: 'var(--red)', fontSize: '13px',
+                            color: 'var(--red)', fontSize: '12px', fontWeight: 700,
                             cursor: 'pointer', transition: 'var(--transition)',
                           }}
                         >
