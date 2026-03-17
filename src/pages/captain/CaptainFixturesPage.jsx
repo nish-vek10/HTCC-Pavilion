@@ -1,6 +1,7 @@
 // pavilion-web/src/pages/captain/CaptainFixturesPage.jsx
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -466,16 +467,19 @@ export default function CaptainFixturesPage() {
         )}
       </div>
 
-      <ConfirmModal
-        isOpen={deleteModal.open}
-        title="Delete Fixture"
-        message={`Delete the fixture vs ${deleteModal.opponent}? All availability responses will also be removed.`}
-        confirmLabel="Delete Fixture"
-        cancelLabel="Keep It"
-        confirmDanger={true}
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteModal({ open: false, fixtureId: null, opponent: '' })}
-      />
+      {createPortal(
+        <ConfirmModal
+          isOpen={deleteModal.open}
+          title="Delete Fixture"
+          message={`Delete the fixture vs ${deleteModal.opponent}? All availability responses will also be removed.`}
+          confirmLabel="Delete Fixture"
+          cancelLabel="Keep It"
+          confirmDanger={true}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteModal({ open: false, fixtureId: null, opponent: '' })}
+        />,
+        document.body
+      )}
     </AppShell>
   )
 }

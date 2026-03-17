@@ -1,6 +1,7 @@
 // pavilion-web/src/pages/admin/AdminFixturesPage.jsx
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -8,7 +9,28 @@ import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import ConfirmModal from '../../components/ui/ConfirmModal.jsx'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 import { PAGE_TITLES, MATCH_TYPE_LABELS } from '../../lib/constants.js'
+
+// ── toLocalISO — avoids UTC/BST off-by-one ────────────────────────────────────
+function toLocalISO(d) {
+  const year  = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day   = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// ── Monday 00:00 — fixtures before this move to archive ───────────────────────
+// Saturday + Sunday fixtures remain in upcoming all weekend, archive on Monday
+function getThisMondayISO() {
+  const today = new Date()
+  const day   = today.getDay()
+  const diff  = day === 0 ? -6 : 1 - day
+  const mon   = new Date(today)
+  mon.setDate(today.getDate() + diff)
+  mon.setHours(0, 0, 0, 0)
+  return toLocalISO(mon)
+}
 
 // ─── CONFIGURABLE ─────────────────────────────────
 const EMPTY_FORM = {
@@ -34,6 +56,7 @@ export default function AdminFixturesPage() {
   const [submitting,  setSubmitting]  = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, fixtureId: null, opponent: '' })
   const [reminding,   setReminding]   = useState(null)  // fixtureId currently sending reminder
+  const [showArchive, setShowArchive] = useState(false)
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_FIXTURES }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -145,8 +168,13 @@ export default function AdminFixturesPage() {
     }
   }
 
-  // ── Group by month ──
-  const grouped = fixtures.reduce((acc, f) => {
+  // ── Split into upcoming and past — mirrors native getThisMondayISO logic ──
+  const thisMondayISO    = getThisMondayISO()
+  const upcomingFixtures = fixtures.filter(f => f.match_date >= thisMondayISO)
+  const pastFixtures     = fixtures.filter(f => f.match_date <  thisMondayISO)
+
+  // ── Group upcoming by month for sticky headers ─────────────────────────────
+  const grouped = upcomingFixtures.reduce((acc, f) => {
     const month = format(parseISO(f.match_date), 'MMMM yyyy')
     if (!acc[month]) acc[month] = []
     acc[month].push(f)
@@ -273,8 +301,8 @@ export default function AdminFixturesPage() {
 
         {/* ── Fixtures list ── */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-            Loading fixtures…
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <ClubLoader message="Loading fixtures…" size={64} />
           </div>
         ) : fixtures.length === 0 ? (
           <div className="card" style={{ padding: '60px', textAlign: 'center' }}>
@@ -287,16 +315,127 @@ export default function AdminFixturesPage() {
             </div>
           </div>
         ) : (
-          Object.entries(grouped).map(([month, monthFixtures]) => (
+          <>
+            {/* ── Past Fixtures Archive toggle — mirrors native archiveToggle ── */}
+            {pastFixtures.length > 0 && (
+              <div
+                onClick={() => setShowArchive(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'rgba(139,155,180,0.06)',
+                  border: '1px solid rgba(139,155,180,0.2)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 18px', marginBottom: '20px',
+                  cursor: 'pointer', transition: 'var(--transition)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,155,180,0.1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,155,180,0.06)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '20px' }}>🗄</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-muted)' }}>
+                      Past Fixtures Archive
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '2px' }}>
+                      {pastFixtures.length} completed fixture{pastFixtures.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                  {showArchive ? '▲' : '▼'}
+                </span>
+              </div>
+            )}
+
+            {/* ── Archive list ── */}
+            {showArchive && pastFixtures.length > 0 && (
+              <div style={{ marginBottom: '28px' }}>
+                {[...pastFixtures].sort((a, b) => b.match_date.localeCompare(a.match_date)).map(fixture => {
+                  const isPublished = fixture.squads?.[0]?.published || false
+                  return (
+                    <div key={fixture.id} className="card" style={{
+                      padding: '14px 20px', marginBottom: '8px',
+                      opacity: 0.65,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          width: '42px', textAlign: 'center', flexShrink: 0,
+                          borderRight: '1px solid var(--navy-border)', paddingRight: '16px',
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', color: 'var(--text-muted)', lineHeight: 1 }}>
+                            {format(parseISO(fixture.match_date), 'dd')}
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-faint)', letterSpacing: '1px' }}>
+                            {format(parseISO(fixture.match_date), 'EEE').toUpperCase()}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gold)', background: 'rgba(245,197,24,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(245,197,24,0.2)' }}>
+                              {fixture.teams?.name}
+                            </span>
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'rgba(139,155,180,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(139,155,180,0.2)' }}>
+                              PLAYED
+                            </span>
+                            {isPublished && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--green)', background: 'rgba(34,197,94,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.2)' }}>
+                                ✓ SQUAD
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                            HTCC <span style={{ fontFamily: 'var(--font-display)', color: 'var(--text-muted)' }}>VS</span> {fixture.opponent?.toUpperCase()}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '2px' }}>
+                            📍 {fixture.venue} · {format(parseISO(fixture.match_date), 'MMM yyyy')}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0, marginLeft: '12px' }}>
+                        <button onClick={() => navigate('/captain/fixtures/' + fixture.id + '/squad')}
+                          style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)', color: 'var(--gold)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                          {isPublished ? '👁 Squad' : '🏏 Squad'}
+                        </button>
+                        <button onClick={() => handleEdit(fixture)}
+                          style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--navy-border)', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>
+                          Edit
+                        </button>
+                        <button onClick={() => promptDelete(fixture.id, fixture.opponent)}
+                          style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--red)', fontSize: '12px', cursor: 'pointer' }}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* ── Upcoming fixtures grouped by month with sticky headers ── */}
+            {upcomingFixtures.length === 0 && !loading && (
+              <div className="card" style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                No upcoming fixtures scheduled
+              </div>
+            )}
+
+          {Object.entries(grouped).map(([month, monthFixtures]) => (
             <div key={month} style={{ marginBottom: '36px' }}>
-              {/* Month header */}
+              {/* Month header — sticky, mirrors native monthHeaderRow */}
               <div style={{
-                fontSize: '13px', fontWeight: 700, letterSpacing: '2px',
+                position: 'sticky', top: '64px', zIndex: 10,
+                fontSize: '12px', fontWeight: 700, letterSpacing: '2px',
                 textTransform: 'uppercase', color: 'var(--gold)',
-                marginBottom: '14px', paddingBottom: '10px',
+                marginBottom: '14px', paddingBottom: '10px', paddingTop: '10px',
                 borderBottom: '1px solid var(--navy-border)',
+                background: 'var(--bg-primary)',
+                display: 'flex', justifyContent: 'space-between',
               }}>
-                {month}
+                <span>{month}</span>
+                <span style={{ color: 'var(--text-faint)', fontWeight: 400, letterSpacing: 0 }}>
+                  {monthFixtures.length} fixture{monthFixtures.length !== 1 ? 's' : ''}
+                </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -442,19 +581,25 @@ export default function AdminFixturesPage() {
               </div>
             </div>
           ))
+        }
+          </>
         )}
       </div>
 
-      <ConfirmModal
-        isOpen={deleteModal.open}
-        title="Delete Fixture"
-        message={'Delete the fixture vs ' + deleteModal.opponent + '? All availability responses will also be removed and this cannot be undone.'}
-        confirmLabel="Delete Fixture"
-        cancelLabel="Keep It"
-        confirmDanger={true}
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteModal({ open: false, fixtureId: null, opponent: '' })}
-      />
+      {createPortal(
+        {createPortal(
+        <ConfirmModal
+          isOpen={deleteModal.open}
+          title="Delete Fixture"
+          message={'Delete the fixture vs ' + deleteModal.opponent + '? All availability responses will also be removed and this cannot be undone.'}
+          confirmLabel="Delete Fixture"
+          cancelLabel="Keep It"
+          confirmDanger={true}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteModal({ open: false, fixtureId: null, opponent: '' })}
+        />,
+        document.body
+      )}
     </AppShell>
   )
 }
