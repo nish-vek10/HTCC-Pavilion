@@ -55,7 +55,7 @@ export default function App() {
 
   // ── Minimum splash duration — 3.5 seconds ──
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeDone(true), 3500)
+    const timer = setTimeout(() => setMinTimeDone(true), 4500)
     return () => clearTimeout(timer)
   }, [])
 
