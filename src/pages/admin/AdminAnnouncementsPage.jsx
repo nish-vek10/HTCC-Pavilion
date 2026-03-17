@@ -26,7 +26,8 @@ const AUDIENCE_META = {
 
 const EMPTY_FORM = { title: '', body: '', target_role: 'all' }
 
-export default function AdminAnnouncementsPage() {
+// embedded=true → skip AppShell wrapper (used inside AdminSessionsPage combined view)
+export default function AdminAnnouncementsPage({ embedded = false }) {
   const profile = useAuthStore(state => state.profile)
 
   const [announcements, setAnnouncements] = useState([])
@@ -99,9 +100,8 @@ export default function AdminAnnouncementsPage() {
   const bodyLength = form.body.length
   const BODY_LIMIT = 1000
 
-  return (
-    <AppShell>
-      <div style={{ maxWidth: '860px', margin: '0 auto', padding: '32px 24px' }}>
+  const content = (
+      <div style={{ maxWidth: '860px', margin: '0 auto', padding: embedded ? '0' : '32px 24px' }}>
 
         {/* ── Header ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '36px', flexWrap: 'wrap', gap: '16px' }}>
@@ -360,6 +360,9 @@ export default function AdminAnnouncementsPage() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteModal({ open: false, id: null, title: '' })}
       />
-    </AppShell>
+    </div>
   )
+
+  if (embedded) return content
+  return <AppShell>{content}</AppShell>
 }

@@ -130,6 +130,8 @@ export const ROUTES = {
   ADMIN_MEMBERS:        '/admin/members',
   ADMIN_FIXTURES:       '/admin/fixtures',
   ADMIN_ANNOUNCEMENTS:  '/admin/announcements',
+  ADMIN_SESSIONS:       '/admin/sessions',
+  ADMIN_TRAINING_DETAIL:'/admin/sessions/:sessionId',
   NOTIFICATIONS:          '/notifications',
   MATCH_CONFIRMATION:     '/fixture-confirmation/:fixtureId',
 }
@@ -152,5 +154,7 @@ export const PAGE_TITLES = {
   ADMIN_MATCHDAY:      'Pavilion · Matchday — Admin',
   ADMIN_FIXTURES:      'Pavilion · Fixtures — Admin',
   ADMIN_MEMBERS:       'Pavilion · Members — Admin',
-  ADMIN_ANNOUNCEMENTS: 'Pavilion · Announcements — Admin',
+  ADMIN_ANNOUNCEMENTS:  'Pavilion · Announcements — Admin',
+  ADMIN_SESSIONS:       'Pavilion · Sessions — Admin',
+  ADMIN_TRAINING_DETAIL:'Pavilion · Training Session — Admin',
 }

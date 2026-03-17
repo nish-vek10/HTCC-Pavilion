@@ -30,7 +30,7 @@ const ADMIN_TABS = [
   { label: 'Matchday', path: '/admin/matchday',          icon: '🏏'  },  // matches native
   { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅'  },
   { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥'  },
-  { label: 'Sessions', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '🏋️' },
+  { label: 'Sessions', path: ROUTES.ADMIN_SESSIONS, icon: '🏋️' },
   { label: 'Profile',  path: '/admin/profile',           icon: '👤'  },  // distinct path → fromAdmin=true
 ]
 

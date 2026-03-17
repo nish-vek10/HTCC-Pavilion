@@ -34,6 +34,8 @@ import AdminFixturesPage  from './pages/admin/AdminFixturesPage.jsx'
 import AdminMembersPage   from './pages/admin/AdminMembersPage.jsx'
 import AdminMatchdayPage      from './pages/admin/AdminMatchdayPage.jsx'
 import AdminAnnouncementsPage  from './pages/admin/AdminAnnouncementsPage.jsx'
+import AdminSessionsPage       from './pages/admin/AdminSessionsPage.jsx'
+import AdminTrainingDetailPage from './pages/admin/AdminTrainingDetailPage.jsx'
 import NotificationsPage       from './pages/member/NotificationsPage.jsx'
 import MatchConfirmationPage   from './pages/member/MatchConfirmationPage.jsx'
 
@@ -109,6 +111,13 @@ export default function App() {
         } />
         <Route path={ROUTES.ADMIN_ANNOUNCEMENTS} element={
           <AdminRoute><AdminAnnouncementsPage /></AdminRoute>
+        } />
+        {/* ── Sessions tab — combined Training + Announcements toggle ── */}
+        <Route path={ROUTES.ADMIN_SESSIONS} element={
+          <AdminRoute><AdminSessionsPage /></AdminRoute>
+        } />
+        <Route path="/admin/sessions/:sessionId" element={
+          <AdminRoute><AdminTrainingDetailPage /></AdminRoute>
         } />
 
         <Route path={ROUTES.PROFILE} element={
