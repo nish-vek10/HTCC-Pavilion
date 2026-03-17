@@ -52,11 +52,11 @@ export default function SplashScreen() {
     const htDuration  = pavDuration + 400 + WORDS[1].text.length * CHAR_MS
     const ccDuration  = htDuration + 200 + WORDS[2].text.length * CHAR_MS
 
-    const t1 = setTimeout(() => setPhase(1), 400)              // start PAVILION
+    const t1 = setTimeout(() => setPhase(1), 400)               // start PAVILION
     const t2 = setTimeout(() => setPhase(2), pavDuration + 200) // show divider
     const t3 = setTimeout(() => setPhase(3), pavDuration + 500) // start HARROW TOWN
     const t4 = setTimeout(() => setPhase(4), htDuration + 200)  // start CRICKET CLUB
-    const t5 = setTimeout(() => setPhase(5), ccDuration + 400)  // pulse dots
+    const t5 = setTimeout(() => setPhase(5), ccDuration + 1400) // pulse dots — +1s extra
 
     // Cursor blinks then disappears after PAVILION finishes
     const tCursor = setTimeout(() => {
@@ -218,7 +218,7 @@ export default function SplashScreen() {
       {phase >= 3 && (
         <div style={{
           fontFamily:    'var(--font-display)',
-          fontSize:      '20px',
+          fontSize:      '26px',
           letterSpacing: '5px',
           color:         '#F5C518',
           lineHeight:    1,
@@ -233,7 +233,7 @@ export default function SplashScreen() {
       {phase >= 4 && (
         <div style={{
           fontFamily:    'var(--font-display)',
-          fontSize:      '13px',
+          fontSize:      '16px',
           letterSpacing: '5px',
           color:         '#8B9BB4',
           lineHeight:    1,
