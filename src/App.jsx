@@ -1,6 +1,6 @@
 // pavilion-web/src/App.jsx
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 
@@ -46,15 +46,21 @@ import SplashScreen from './components/ui/SplashScreen.jsx'
 export default function App() {
   const init    = useAuthStore(state => state.init)
   const loading = useAuthStore(state => state.loading)
+  const [minTimeDone, setMinTimeDone] = useState(false)
 
   // ── Initialise auth session on app mount ──
   useEffect(() => {
     init()
   }, [init])
 
-  // ── Show splash while auth is initialising ──
-  // loading starts true, becomes false once init() resolves
-  if (loading) return <SplashScreen />
+  // ── Minimum splash duration — 3.5 seconds ──
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeDone(true), 3500)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // ── Show splash until BOTH auth resolved AND 3.5s elapsed ──
+  if (loading || !minTimeDone) return <SplashScreen />
 
   return (
     <BrowserRouter>
