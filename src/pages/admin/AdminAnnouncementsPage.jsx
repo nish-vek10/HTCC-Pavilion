@@ -351,8 +351,6 @@ export default function AdminAnnouncementsPage({ embedded = false }) {
         )}
       </div>
 
-      </div>
-
       <ConfirmModal
         isOpen={deleteModal.open}
         title="Delete Announcement"
