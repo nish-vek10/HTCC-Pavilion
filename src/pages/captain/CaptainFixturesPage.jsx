@@ -230,7 +230,7 @@ export default function CaptainFixturesPage() {
             background: editingId ? 'rgba(245,197,24,0.03)' : undefined,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: editingId ? 'var(--text-primary)' : 'var(--gold)' }}>
                 {editingId ? '✏️  Edit Fixture' : '➕  New Fixture'}
               </div>
               {editingId && (
@@ -262,14 +262,35 @@ export default function CaptainFixturesPage() {
 
                 <div>
                   <label className="input-label">Match Date</label>
-                  <input className="input" name="match_date" type="date"
-                    value={form.match_date} onChange={handleChange} required />
+                  <input
+                    className="input"
+                    name="match_date"
+                    type="date"
+                    value={form.match_date}
+                    onChange={handleChange}
+                    required
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      colorScheme: 'dark',
+                      color: form.match_date ? 'var(--text-primary)' : 'var(--text-muted)',
+                    }}
+                  />
                 </div>
 
                 <div>
                   <label className="input-label">Kick-off Time</label>
-                  <input className="input" name="match_time" type="time"
-                    value={form.match_time} onChange={handleChange} required />
+                  <input
+                    className="input"
+                    name="match_time"
+                    type="time"
+                    value={form.match_time}
+                    onChange={handleChange}
+                    required
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      colorScheme: 'dark',
+                    }}
+                  />
                 </div>
 
                 <div>
