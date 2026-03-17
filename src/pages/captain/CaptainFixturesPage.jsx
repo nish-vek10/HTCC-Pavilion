@@ -245,7 +245,7 @@ export default function CaptainFixturesPage() {
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minWidth: 0 }}>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="input-label">Opponent</label>
                   <input className="input" name="opponent" type="text"
@@ -260,7 +260,7 @@ export default function CaptainFixturesPage() {
                     value={form.venue} onChange={handleChange} required />
                 </div>
 
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label className="input-label">Match Date</label>
                   <input
                     className="input"
@@ -277,7 +277,7 @@ export default function CaptainFixturesPage() {
                   />
                 </div>
 
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label className="input-label">Kick-off Time</label>
                   <input
                     className="input"

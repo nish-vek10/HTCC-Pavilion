@@ -206,7 +206,7 @@ export default function AdminTrainingPage({ embedded = false }) {
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minWidth: 0 }}>
 
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="input-label">Title</label>
@@ -220,7 +220,7 @@ export default function AdminTrainingPage({ embedded = false }) {
                   value={form.venue} onChange={e => setForm(f => ({ ...f, venue: e.target.value }))} required />
               </div>
 
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label className="input-label">Date</label>
                 <input
                   className="input" type="date"
@@ -237,8 +237,8 @@ export default function AdminTrainingPage({ embedded = false }) {
                 />
               </div>
 
-              <div>
-                <label className="input-label">Kick-off Time</label>
+              <div style={{ minWidth: 0 }}>
+                <label className="input-label">Start Time</label>
                 <input
                   className="input" type="time"
                   value={form.session_time}

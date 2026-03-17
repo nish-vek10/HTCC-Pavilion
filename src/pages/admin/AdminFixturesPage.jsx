@@ -232,7 +232,7 @@ export default function AdminFixturesPage() {
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minWidth: 0 }}>
                 <div>
                   <label className="input-label">Team</label>
                   <select className="input" name="team_id" value={form.team_id} onChange={handleChange} required>
@@ -264,7 +264,7 @@ export default function AdminFixturesPage() {
                     value={form.venue} onChange={handleChange} required />
                 </div>
 
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label className="input-label">Match Date</label>
                   <input
                     className="input"
@@ -281,7 +281,7 @@ export default function AdminFixturesPage() {
                   />
                 </div>
 
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label className="input-label">Kick-off Time</label>
                   <input
                     className="input"
