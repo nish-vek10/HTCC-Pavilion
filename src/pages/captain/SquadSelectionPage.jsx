@@ -408,11 +408,30 @@ export default function SquadSelectionPage() {
           </div>
         </div>
 
-        {/* ── Main layout ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+        {/* ── Responsive layout: single column mobile (squad top, players below)
+            two-column desktop (players left, squad panel sticky right)
+            Mirrors native: squad counter always visible above player list ── */}
+        <style>{`
+          .squad-selection-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            align-items: start;
+          }
+          .squad-panel-col  { order: 1; }
+          .player-pool-col  { order: 2; }
+          @media (min-width: 768px) {
+            .squad-selection-layout {
+              grid-template-columns: 1fr 340px;
+            }
+            .squad-panel-col { order: 2; position: sticky; top: 84px; }
+            .player-pool-col { order: 1; }
+          }
+        `}</style>
+        <div className="squad-selection-layout">
 
-          {/* ── LEFT: Player pool ── */}
-          <div>
+          {/* ── Player pool ── */}
+          <div className="player-pool-col">
             <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                 Team Players ({players.length})
@@ -534,8 +553,9 @@ export default function SquadSelectionPage() {
             </div>
           </div>
 
-          {/* ── RIGHT: Squad panel ── */}
-          <div style={{ position: 'sticky', top: '84px' }}>
+          {/* ── Squad panel ── */}
+          <div className="squad-panel-col">
+            <div>
             <div className="card" style={{
               overflow: 'hidden',
               border: isPublished
@@ -563,31 +583,29 @@ export default function SquadSelectionPage() {
                   </div>
                 </div>
 
-                {/* C / WK role status — mirrors native roleStatus ── */}
-                {(captain || wicketkeeper) && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                    <div style={{
-                      flex: 1, padding: '5px 8px', borderRadius: '4px',
-                      background: captain ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.04)',
-                      border: captain ? '1px solid rgba(245,197,24,0.25)' : '1px solid var(--navy-border)',
-                      fontSize: '10px', fontWeight: 700,
-                      color: captain ? 'var(--gold)' : 'var(--text-faint)',
-                      letterSpacing: '0.5px',
-                    }}>
-                      {captain ? `C: ${captain.name}` : 'Captain not set'}
-                    </div>
-                    <div style={{
-                      flex: 1, padding: '5px 8px', borderRadius: '4px',
-                      background: wicketkeeper ? 'rgba(96,165,250,0.08)' : 'rgba(255,255,255,0.04)',
-                      border: wicketkeeper ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
-                      fontSize: '10px', fontWeight: 700,
-                      color: wicketkeeper ? '#60A5FA' : 'var(--text-faint)',
-                      letterSpacing: '0.5px',
-                    }}>
-                      {wicketkeeper ? `WK: ${wicketkeeper.name}` : 'WK not set'}
-                    </div>
+                {/* C / WK status — always shown, mirrors native roleStatus ── */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <div style={{
+                    flex: 1, padding: '5px 8px', borderRadius: '4px',
+                    background: captain ? 'rgba(245,197,24,0.08)' : 'rgba(255,255,255,0.04)',
+                    border: captain ? '1px solid rgba(245,197,24,0.25)' : '1px solid var(--navy-border)',
+                    fontSize: '10px', fontWeight: 700,
+                    color: captain ? 'var(--gold)' : 'var(--text-faint)',
+                    letterSpacing: '0.5px',
+                  }}>
+                    {captain ? `C: ${captain.name}` : 'Captain not set'}
                   </div>
-                )}
+                  <div style={{
+                    flex: 1, padding: '5px 8px', borderRadius: '4px',
+                    background: wicketkeeper ? 'rgba(96,165,250,0.08)' : 'rgba(255,255,255,0.04)',
+                    border: wicketkeeper ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--navy-border)',
+                    fontSize: '10px', fontWeight: 700,
+                    color: wicketkeeper ? '#60A5FA' : 'var(--text-faint)',
+                    letterSpacing: '0.5px',
+                  }}>
+                    {wicketkeeper ? `WK: ${wicketkeeper.name}` : 'WK not set'}
+                  </div>
+                </div>
 
                 {/* Progress bar */}
                 <div style={{
@@ -713,9 +731,9 @@ export default function SquadSelectionPage() {
                       {SQUAD_SIZE - selected.length} more player{SQUAD_SIZE - selected.length !== 1 ? 's' : ''} needed to publish
                     </div>
                   )}
-                  {!isPublished && selectedPlayers.length > 0 && (
+                  {!isPublished && (
                     <div style={{ fontSize: '11px', color: 'var(--text-faint)', textAlign: 'center', marginTop: '4px' }}>
-                      Tap a player name to assign C or WK
+                      Tap a player in the squad to assign Captain or WK role
                     </div>
                   )}
                 </div>
@@ -746,6 +764,7 @@ export default function SquadSelectionPage() {
                   </button>
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>
