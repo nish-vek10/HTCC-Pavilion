@@ -587,7 +587,6 @@ export default function AdminFixturesPage() {
       </div>
 
       {createPortal(
-        {createPortal(
         <ConfirmModal
           isOpen={deleteModal.open}
           title="Delete Fixture"
