@@ -101,6 +101,7 @@ export default function AdminAnnouncementsPage({ embedded = false }) {
   const BODY_LIMIT = 1000
 
   const content = (
+    <>
       <div style={{ maxWidth: '860px', margin: '0 auto', padding: embedded ? '0' : '32px 24px' }}>
 
         {/* ── Header ── */}
@@ -361,6 +362,7 @@ export default function AdminAnnouncementsPage({ embedded = false }) {
         onCancel={() => setDeleteModal({ open: false, id: null, title: '' })}
       />
     </div>
+    </>
   )
 
   if (embedded) return content
