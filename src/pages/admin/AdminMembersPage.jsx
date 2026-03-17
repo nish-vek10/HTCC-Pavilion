@@ -135,6 +135,18 @@ export default function AdminMembersPage() {
         title: notifTitle, body: notifBody, read: false,
       })
     }
+
+    // ── Send approval email via Edge Function ─────────────────────────────
+    if (newRole === 'member') {
+      const firstName = memberName?.split(' ')[0] || memberName
+      const { data: memberProfile } = await supabase
+        .from('profiles').select('email').eq('id', memberId).single()
+      if (memberProfile?.email) {
+        supabase.functions.invoke('send-approval-email', {
+          body: { email: memberProfile.email, firstName },
+        }).catch(err => console.warn('[Approval email] failed:', err.message))
+      }
+    }
   }
 
   // ── Assign member to team ──
