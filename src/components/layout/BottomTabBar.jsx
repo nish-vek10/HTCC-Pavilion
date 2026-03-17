@@ -76,7 +76,12 @@ export default function BottomTabBar() {
         return (
           <button
             key={tab.path}
-            onClick={() => { navigate(tab.path); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            onClick={() => {
+              // Pass fromAdmin context so ProfilePage knows which button to show
+              const state = (isAdmin() && tab.label === 'Profile') ? { fromAdmin: true } : undefined
+              navigate(tab.path, { state })
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
             style={{
               flex:                    1,
               display:                 'flex',

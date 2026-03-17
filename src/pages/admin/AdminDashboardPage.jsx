@@ -58,18 +58,17 @@ export default function AdminDashboardPage() {
   }
 
   // ── Fetch overview stats ──
-  // pending = membership approvals + team join requests combined — both need action
+  // pending = membership approvals only (join requests shown separately in their own section)
   const fetchStats = async () => {
-    const [members, pendingMembers, pendingJoins, fixtureCount] = await Promise.all([
+    const [members, pendingMembers, fixtureCount] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'pending'),
       supabase.from('profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
-      supabase.from('join_requests').select('id', { count: 'exact' }).eq('status', 'pending'),
       supabase.from('fixtures').select('id', { count: 'exact' })
         .gte('match_date', toLocalISO(new Date())),
     ])
     setStats({
       members:  members.count       || 0,
-      pending:  (pendingMembers.count || 0) + (pendingJoins.count || 0),
+      pending:  pendingMembers.count || 0,
       fixtures: fixtureCount.count  || 0,
       teams:    5,
     })
@@ -236,7 +235,7 @@ export default function AdminDashboardPage() {
         }}>
           {[
             { label: 'Active Members', value: stats.members,  color: 'var(--green)',       icon: '👥' },
-            { label: 'Actions Required', value: stats.pending,  color: 'var(--amber)',       icon: '⏳', urgent: stats.pending > 0 },
+            { label: 'Pending Approval', value: stats.pending,  color: '#F97316',            icon: '⏳', urgent: stats.pending > 0 },
             { label: 'Upcoming Fixtures', value: stats.fixtures, color: 'var(--gold)',        icon: '📅' },
             { label: 'Active Teams',    value: stats.teams,    color: 'var(--text-muted)',   icon: '🏏' },
           ].map(stat => (
@@ -338,28 +337,33 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
+                      {/* Stacked ✓ ✕ buttons — matches native screenshot exactly */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
                         <button
                           onClick={() => handleApprove(member.id, member.full_name)}
                           style={{
-                            padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                            width: '40px', height: '40px',
+                            borderRadius: 'var(--radius-md)',
                             background: 'rgba(34,197,94,0.12)',
                             border: '1px solid rgba(34,197,94,0.3)',
-                            color: 'var(--green)', fontSize: '13px', fontWeight: 600,
+                            color: 'var(--green)', fontSize: '16px', fontWeight: 700,
                             cursor: 'pointer', transition: 'var(--transition)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
-                          Approve
+                          ✓
                         </button>
                         <button
                           onClick={() => handleReject(member.id, member.full_name)}
                           style={{
-                            padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                            width: '40px', height: '40px',
+                            borderRadius: 'var(--radius-md)',
                             background: 'rgba(239,68,68,0.08)',
                             border: '1px solid rgba(239,68,68,0.2)',
-                            color: 'var(--red)', fontSize: '13px',
+                            color: 'var(--red)', fontSize: '16px', fontWeight: 700,
                             cursor: 'pointer', transition: 'var(--transition)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
-                          Reject
+                          ✕
                         </button>
                       </div>
                     </div>
@@ -405,28 +409,33 @@ export default function AdminDashboardPage() {
                             </div>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        {/* Stacked ✓ ✕ buttons — matches native screenshot exactly */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
                           <button
                             onClick={() => handleApproveJoin(req)}
                             style={{
-                              padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                              width: '40px', height: '40px',
+                              borderRadius: 'var(--radius-md)',
                               background: 'rgba(34,197,94,0.12)',
                               border: '1px solid rgba(34,197,94,0.3)',
-                              color: 'var(--green)', fontSize: '13px', fontWeight: 600,
+                              color: 'var(--green)', fontSize: '16px', fontWeight: 700,
                               cursor: 'pointer', transition: 'var(--transition)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                            ✓ Approve
+                            ✓
                           </button>
                           <button
                             onClick={() => handleRejectJoin(req)}
                             style={{
-                              padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                              width: '40px', height: '40px',
+                              borderRadius: 'var(--radius-md)',
                               background: 'rgba(239,68,68,0.08)',
                               border: '1px solid rgba(239,68,68,0.2)',
-                              color: 'var(--red)', fontSize: '13px',
+                              color: 'var(--red)', fontSize: '16px', fontWeight: 700,
                               cursor: 'pointer', transition: 'var(--transition)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                            ✕ Reject
+                            ✕
                           </button>
                         </div>
                       </div>
