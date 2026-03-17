@@ -41,14 +41,20 @@ import MatchConfirmationPage   from './pages/member/MatchConfirmationPage.jsx'
 
 // ── Constants ──
 import { ROUTES } from './lib/constants.js'
+import SplashScreen from './components/ui/SplashScreen.jsx'
 
 export default function App() {
-  const init = useAuthStore(state => state.init)
+  const init    = useAuthStore(state => state.init)
+  const loading = useAuthStore(state => state.loading)
 
   // ── Initialise auth session on app mount ──
   useEffect(() => {
     init()
   }, [init])
+
+  // ── Show splash while auth is initialising ──
+  // loading starts true, becomes false once init() resolves
+  if (loading) return <SplashScreen />
 
   return (
     <BrowserRouter>
