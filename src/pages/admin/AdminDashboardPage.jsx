@@ -227,57 +227,46 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* ── Stats Row ── */}
+        {/* ── Stats 2×2 grid — mirrors native exactly: coloured top border, no icons ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: '16px', marginBottom: '40px',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px', marginBottom: '32px',
         }}>
           {[
-            { label: 'Active Members', value: stats.members,  color: 'var(--green)',       icon: '👥' },
-            { label: 'Pending Approval', value: stats.pending,  color: '#F97316',            icon: '⏳', urgent: stats.pending > 0 },
-            { label: 'Upcoming Fixtures', value: stats.fixtures, color: 'var(--gold)',        icon: '📅' },
-            { label: 'Active Teams',    value: stats.teams,    color: 'var(--text-muted)',   icon: '🏏' },
+            { label: 'Active Members',    value: stats.members,  color: '#22C55E'          },
+            { label: 'Pending Approval',  value: stats.pending,  color: '#F97316', urgent: stats.pending > 0 },
+            { label: 'Upcoming Fixtures', value: stats.fixtures, color: '#F5C518'           },
+            { label: 'Active Teams',      value: stats.teams,    color: '#8B9BB4'           },
           ].map(stat => (
             <div key={stat.label} className="card" style={{
-              padding: '22px',
-              border: stat.urgent ? '1px solid rgba(245,197,24,0.3)' : undefined,
-              background: stat.urgent ? 'rgba(245,197,24,0.04)' : undefined,
+              padding: '18px 16px',
+              borderTop: `3px solid ${stat.color}`,
+              border: stat.urgent
+                ? `1px solid rgba(249,115,22,0.3)`
+                : '1px solid var(--navy-border)',
+              background: stat.urgent ? 'rgba(249,115,22,0.04)' : undefined,
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '44px', letterSpacing: '1px',
-                  color: stat.color, lineHeight: 1,
-                }}>
-                  {loading ? '—' : stat.value}
-                </div>
-
-                {/* ── Active Teams: HTCC crest badge; others: emoji ── */}
-                {stat.label === 'Active Teams' ? (
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '50%',
-                    background: '#0D1B2A',
-                    border: '2px solid #F5C518',
-                    boxShadow: '0 0 0 3px rgba(245,197,24,0.15), 0 2px 10px rgba(0,0,0,0.6)',
-                    overflow: 'hidden', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <img
-                      src="/assets/images/htcc-logo.png"
-                      alt="HTCC"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
-                    />
-                  </div>
-                ) : (
-                  <span style={{ fontSize: '24px', opacity: 0.6 }}>{stat.icon}</span>
-                )}
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '36px', letterSpacing: '1px',
+                color: stat.color, lineHeight: '40px',
+              }}>
+                {loading ? '—' : stat.value}
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '8px' }}>
+              <div style={{
+                fontFamily: 'var(--font-body)',
+                fontWeight: 700, fontSize: '11px',
+                color: 'var(--text-muted)', marginTop: '4px',
+              }}>
                 {stat.label}
               </div>
               {stat.urgent && (
-                <div style={{ fontSize: '11px', color: 'var(--amber)', marginTop: '4px', fontWeight: 700 }}>
+                <div style={{
+                  fontSize: '9px', fontWeight: 700,
+                  color: '#F97316', letterSpacing: '1px',
+                  marginTop: '4px', textTransform: 'uppercase',
+                }}>
                   ACTION REQUIRED
                 </div>
               )}
