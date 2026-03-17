@@ -41,8 +41,17 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false)
   const dropdownRef = useRef(null)
 
-  // ── Determine nav links based on role ──
-  const navLinks = isAdmin() ? ADMIN_NAV : isCaptain() ? CAPTAIN_NAV : MEMBER_NAV
+  // ── Detect panel context from URL — mirrors native RootNavigator ──────────
+  // Same logic as BottomTabBar: URL path determines which nav to show,
+  // not the user's role — so admins in member view see member nav
+  const onAdminPath   = location.pathname.startsWith('/admin')
+  const onCaptainPath = location.pathname.startsWith('/captain')
+
+  const navLinks = onAdminPath
+    ? ADMIN_NAV
+    : onCaptainPath
+    ? CAPTAIN_NAV
+    : MEMBER_NAV
 
   // ── Close dropdown on outside click ──
   useEffect(() => {

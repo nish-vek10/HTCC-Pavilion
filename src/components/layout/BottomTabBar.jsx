@@ -30,7 +30,7 @@ const ADMIN_TABS = [
   { label: 'Matchday', path: '/admin/matchday',          icon: '🏏'  },  // matches native
   { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅'  },
   { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥'  },
-  { label: 'Announce', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '📢'  },
+  { label: 'Sessions', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '🏋️' },
   { label: 'Profile',  path: '/admin/profile',           icon: '👤'  },  // distinct path → fromAdmin=true
 ]
 
@@ -47,7 +47,18 @@ export default function BottomTabBar() {
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?'
 
-  const tabs = isAdmin() ? ADMIN_TABS : isCaptain() ? CAPTAIN_TABS : MEMBER_TABS
+  // ── Detect panel context from URL — mirrors native RootNavigator ──────────
+  // Admin/captain on /admin/* or /captain/* → their panel tabs
+  // Admin/captain on member paths (/dashboard, /fixtures, etc.) → member tabs
+  // This replicates MemberNavigator vs AdminNavigator being separate navigators
+  const onAdminPath   = location.pathname.startsWith('/admin')
+  const onCaptainPath = location.pathname.startsWith('/captain')
+
+  const tabs = onAdminPath
+    ? ADMIN_TABS
+    : onCaptainPath
+    ? CAPTAIN_TABS
+    : MEMBER_TABS
 
   return (
     <nav
