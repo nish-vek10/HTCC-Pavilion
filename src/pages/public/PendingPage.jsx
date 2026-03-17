@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { APP_NAME, CLUB_NAME, PAGE_TITLES } from '../../lib/constants.js'
+import { APP_NAME, CLUB_NAME, PAGE_TITLES, ROUTES } from '../../lib/constants.js'
 
 export default function PendingPage() {
 
@@ -93,7 +93,7 @@ export default function PendingPage() {
         }}>
           Questions? Contact your HTCC admin directly.
           <br />
-          <Link to="/login" style={{ color: 'var(--gold)', fontWeight: 600, textDecoration: 'none', marginTop: '8px', display: 'inline-block' }}>
+          <Link to={ROUTES.LOGIN} style={{ color: 'var(--gold)', fontWeight: 600, textDecoration: 'none', marginTop: '8px', display: 'inline-block' }}>
             ← Back to Sign In
           </Link>
         </div>
