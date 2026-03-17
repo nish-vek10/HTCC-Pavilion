@@ -153,25 +153,21 @@ export default function CheckEmailPage() {
           💡 <strong>Can't find the email?</strong> Check your <strong>spam or junk folder</strong> — it may have been filtered automatically.
         </div>
 
-        {/* Divider + back link */}
+        {/* Divider + bottom message */}
         <div style={{
           paddingTop: '24px',
           borderTop: '1px solid var(--navy-border)',
-          fontSize: '13px', color: 'var(--text-muted)',
+          fontSize: '14px', color: 'var(--text-muted)',
+          lineHeight: 1.7,
         }}>
-          Already confirmed?{' '}
-          <Link to={ROUTES.LOGIN} style={{
+          <p style={{ margin: '0 0 12px 0' }}>
+            Already confirmed? You will be notified once an admin approves your account.
+          </p>
+          <Link to={ROUTES.LANDING} style={{
             color: 'var(--gold)', fontWeight: 600,
-            textDecoration: 'none',
+            textDecoration: 'none', fontSize: '13px',
           }}>
-            Sign in →
-          </Link>
-          <br />
-          <Link to={ROUTES.SIGNUP} style={{
-            color: 'var(--text-faint)', fontSize: '12px',
-            textDecoration: 'none', marginTop: '8px', display: 'inline-block',
-          }}>
-            ← Back to Sign Up
+            ← Back to Home
           </Link>
         </div>
       </div>
