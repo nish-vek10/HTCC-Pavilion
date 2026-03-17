@@ -1,11 +1,14 @@
 // pavilion-web/src/pages/admin/AdminMembersPage.jsx
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
 import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import AppShell from '../../components/layout/AppShell.jsx'
+import ConfirmModal from '../../components/ui/ConfirmModal.jsx'
+import ClubLoader from '../../components/ui/ClubLoader.jsx'
 import { PAGE_TITLES, ROLES } from '../../lib/constants.js'
 
 
@@ -27,8 +30,9 @@ export default function AdminMembersPage() {
   const [members,  setMembers]  = useState([])
   const [teams,    setTeams]    = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [search,   setSearch]   = useState('')
-  const [filter,   setFilter]   = useState('all')  // all | pending | member | captain | admin
+  const [search,      setSearch]      = useState('')
+  const [filter,      setFilter]      = useState('all')  // all | pending | member | captain | admin
+  const [rejectModal, setRejectModal] = useState({ open: false, memberId: null, memberName: '' })
 
   useEffect(() => { document.title = PAGE_TITLES.ADMIN_MEMBERS }, [])
   useEffect(() => { if (profile?.id) loadAll() }, [profile?.id])
@@ -107,6 +111,30 @@ export default function AdminMembersPage() {
 
     toast.success(`${memberName} is now ${newRole}`)
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
+
+    // ── Send in-app notification — mirrors native handleRoleChange ────────────
+    let notifType  = 'role_change'
+    let notifTitle = ''
+    let notifBody  = ''
+
+    if (newRole === 'member') {
+      notifType  = 'approval'
+      notifTitle = '✅ Application Approved'
+      notifBody  = 'Welcome to Harrow Town Cricket Club! Your membership has been approved. You now have full access to Pavilion.'
+    } else if (newRole === 'captain') {
+      notifTitle = "🏏 You've Been Made Captain"
+      notifBody  = 'Congratulations! You have been promoted to Captain. You now have access to the Captain panel and squad selection.'
+    } else if (newRole === 'admin') {
+      notifTitle = '⚙️ You\'ve Been Made Admin'
+      notifBody  = 'You have been granted Admin access to the Pavilion platform. You can now manage fixtures, members, and training sessions.'
+    }
+
+    if (notifTitle) {
+      await supabase.from('notifications').insert({
+        user_id: memberId, type: notifType,
+        title: notifTitle, body: notifBody, read: false,
+      })
+    }
   }
 
   // ── Assign member to team ──
@@ -206,9 +234,11 @@ export default function AdminMembersPage() {
           />
         </div>
 
-        {/* ── Members Table ── */}
+        {/* ── Members list ── */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>No Members Added.</div>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            <ClubLoader message="Loading members…" size={64} />
+          </div>
         ) : displayed.length === 0 ? (
           <div className="card" style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
             No members found
@@ -218,115 +248,118 @@ export default function AdminMembersPage() {
             {displayed.map(member => {
               const memberTeamIds = member.team_members?.map(tm => tm.team_id) || []
               const isCurrentUser = member.id === currentUser.id
+              const roleColor     = ROLE_COLOURS[member.role] || '#8B9BB4'
 
               return (
-                <div key={member.id} className="card" style={{ padding: '16px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                // ── Native card structure: top row → team chips → actions ──
+                <div key={member.id} className="card" style={{ padding: '16px' }}>
 
-                    {/* Avatar */}
+                  {/* ── Top row: avatar + name/role/sub — mirrors native memberTop ── */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                     <div style={{
                       width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
-                      background: 'linear-gradient(135deg, var(--navy-light), var(--gold-dim))',
-                      border: `2px solid ${ROLE_COLOURS[member.role] || 'var(--navy-border)'}`,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: `2px solid ${roleColor}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '14px', fontWeight: 700,
-                      color: ROLE_COLOURS[member.role] || 'var(--text-muted)',
+                      fontSize: '13px', fontWeight: 700, color: roleColor,
                     }}>
-                      {member.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+                      {member.full_name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                     </div>
 
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: '180px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Name row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
                           {member.full_name}
                         </span>
                         {isCurrentUser && (
-                          <span style={{ fontSize: '11px', color: 'var(--gold)', background: 'rgba(245,197,24,0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gold)', background: 'rgba(245,197,24,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                             You
                           </span>
                         )}
                         <span style={{
-                          fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase',
-                          color: ROLE_COLOURS[member.role], background: `${ROLE_COLOURS[member.role]}18`,
-                          padding: '2px 8px', borderRadius: '4px',
+                          fontSize: '9px', fontWeight: 700, letterSpacing: '1px',
+                          textTransform: 'uppercase', color: roleColor,
+                          background: `${roleColor}18`,
+                          border: `1px solid ${roleColor}44`,
+                          padding: '2px 7px', borderRadius: '4px',
                         }}>
-                          {member.role}
+                          {member.role.toUpperCase()}
                         </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
-                        {member.phone || 'No phone'} · Joined {format(parseISO(member.created_at), 'd MMM yyyy')}
-                      </div>
-
-                      {/* Team chips */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                        {teams.map(team => {
-                          const assigned = memberTeamIds.includes(team.id)
-                          return (
-                            <button key={team.id}
-                              onClick={() => handleTeamToggle(member.id, team.id, assigned, member.full_name)}
-                              style={{
-                                padding: '4px 10px', borderRadius: 'var(--radius-full)',
-                                border: `1px solid ${assigned ? 'rgba(34,197,94,0.4)' : 'var(--navy-border)'}`,
-                                background: assigned ? 'rgba(34,197,94,0.1)' : 'transparent',
-                                color: assigned ? 'var(--green)' : 'var(--text-muted)',
-                                fontSize: '12px', fontWeight: assigned ? 600 : 400,
-                                cursor: 'pointer', transition: 'var(--transition)',
-                              }}>
-                              {assigned ? '✓ ' : '+ '}{team.name}
-                            </button>
-                          )
-                        })}
+                      {/* Sub */}
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                        {member.phone || 'No phone'} · {format(parseISO(member.created_at), 'd MMM yyyy')}
                       </div>
                     </div>
-
-                    {/* Pending — show Approve / Reject buttons */}
-                    {!isCurrentUser && member.role === 'pending' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
-                        <button
-                          onClick={() => handleRoleChange(member.id, 'member', member.full_name)}
-                          style={{
-                            padding: '8px 18px', borderRadius: 'var(--radius-md)',
-                            background: 'rgba(34,197,94,0.12)',
-                            border: '1px solid rgba(34,197,94,0.3)',
-                            color: 'var(--green)', fontSize: '13px', fontWeight: 700,
-                            cursor: 'pointer', transition: 'var(--transition)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          ✓ Approve
-                        </button>
-                        <button
-                          onClick={() => handleRoleChange(member.id, 'rejected', member.full_name)}
-                          style={{
-                            padding: '8px 18px', borderRadius: 'var(--radius-md)',
-                            background: 'rgba(239,68,68,0.08)',
-                            border: '1px solid rgba(239,68,68,0.2)',
-                            color: 'var(--red)', fontSize: '13px',
-                            cursor: 'pointer', transition: 'var(--transition)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          ✕ Reject
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Approved — show role dropdown */}
-                    {!isCurrentUser && member.role !== 'superadmin' && member.role !== 'pending' && (
-                      <select
-                        className="input"
-                        style={{ width: '130px', margin: 0, fontSize: '13px', padding: '8px 12px' }}
-                        value={member.role}
-                        onChange={e => handleRoleChange(member.id, e.target.value, member.full_name)}
-                      >
-                        {getRoleOptions().map(r => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
-                    )}
-
                   </div>
+
+                  {/* ── Team chips — mirrors native teamChips ── */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                    {teams.map(team => {
+                      const assigned = memberTeamIds.includes(team.id)
+                      return (
+                        <button key={team.id}
+                          onClick={() => handleTeamToggle(member.id, team.id, assigned, member.full_name)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 'var(--radius-full)',
+                            border: `1px solid ${assigned ? 'rgba(34,197,94,0.4)' : 'var(--navy-border)'}`,
+                            background: assigned ? 'rgba(34,197,94,0.1)' : 'transparent',
+                            color: assigned ? '#22C55E' : 'var(--text-muted)',
+                            fontSize: '11px', fontWeight: assigned ? 700 : 400,
+                            cursor: 'pointer', transition: 'var(--transition)',
+                          }}>
+                          {assigned ? '✓ ' : '+ '}{team.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* ── Pending actions — ✓ ✕ stacked, matches native pendingActions ── */}
+                  {!isCurrentUser && member.role === 'pending' && (
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                      <button
+                        onClick={() => handleRoleChange(member.id, 'member', member.full_name)}
+                        style={{
+                          flex: 1, padding: '10px 0',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'rgba(34,197,94,0.12)',
+                          border: '1px solid rgba(34,197,94,0.3)',
+                          color: '#22C55E', fontSize: '13px', fontWeight: 700,
+                          cursor: 'pointer', transition: 'var(--transition)',
+                        }}
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => setRejectModal({ open: true, memberId: member.id, memberName: member.full_name })}
+                        style={{
+                          flex: 1, padding: '10px 0',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'rgba(239,68,68,0.08)',
+                          border: '1px solid rgba(239,68,68,0.2)',
+                          color: 'var(--red)', fontSize: '13px', fontWeight: 700,
+                          cursor: 'pointer', transition: 'var(--transition)',
+                        }}
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── Role change — dropdown for non-pending, non-superadmin, non-self ── */}
+                  {!isCurrentUser && member.role !== 'superadmin' && member.role !== 'pending' && (
+                    <select
+                      className="input"
+                      style={{ width: '100%', margin: 0, fontSize: '12px', padding: '8px 12px' }}
+                      value={member.role}
+                      onChange={e => handleRoleChange(member.id, e.target.value, member.full_name)}
+                    >
+                      {getRoleOptions().map(r => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )
             })}
@@ -334,6 +367,22 @@ export default function AdminMembersPage() {
         )}
 
       </div>
+    {createPortal(
+        <ConfirmModal
+          isOpen={rejectModal.open}
+          title="Reject Application"
+          message={`Reject ${rejectModal.memberName}'s application and remove them from the platform? This cannot be undone.`}
+          confirmLabel="Reject"
+          cancelLabel="Cancel"
+          confirmDanger={true}
+          onConfirm={() => {
+            handleRoleChange(rejectModal.memberId, 'rejected', rejectModal.memberName)
+            setRejectModal({ open: false, memberId: null, memberName: '' })
+          }}
+          onCancel={() => setRejectModal({ open: false, memberId: null, memberName: '' })}
+        />,
+        document.body
+      )}
     </AppShell>
   )
 }
