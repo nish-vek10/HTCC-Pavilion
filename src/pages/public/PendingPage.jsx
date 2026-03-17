@@ -2,11 +2,14 @@
 
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuthStore } from '../../store/authStore.js'
 import { APP_NAME, CLUB_NAME, PAGE_TITLES, ROUTES } from '../../lib/constants.js'
 
 export default function PendingPage() {
 
   // ── Set browser tab title ──
+  const signOut = useAuthStore(state => state.signOut)
+
   useEffect(() => {
     document.title = PAGE_TITLES.PENDING
   }, [])
@@ -93,9 +96,16 @@ export default function PendingPage() {
         }}>
           Questions? Contact your HTCC admin directly.
           <br />
-          <Link to={ROUTES.LOGIN} style={{ color: 'var(--gold)', fontWeight: 600, textDecoration: 'none', marginTop: '8px', display: 'inline-block' }}>
-            ← Back to Sign In
-          </Link>
+          href="/"
+            style={{ color: 'var(--gold)', fontWeight: 600, textDecoration: 'none', marginTop: '8px', display: 'inline-block' }}
+            onClick={async (e) => {
+              e.preventDefault()
+              await signOut()
+              window.location.href = '/'
+            }}
+          >
+            ← Back to Homepage
+          </a>
         </div>
       </div>
 
