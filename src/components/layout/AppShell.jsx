@@ -35,7 +35,8 @@ export default function AppShell({ children }) {
         className="app-main"
         style={{
           minHeight: 'calc(100vh - 64px)',
-          animation: 'page-fade-in 0.22s ease forwards',
+          /* Reduced to 0.1s — just enough to mask flash, not enough to feel sluggish */
+          animation: 'page-fade-in 0.1s ease forwards',
         }}
       >
         {children}
