@@ -108,7 +108,8 @@ export const ROUTES = {
   LANDING:  '/',
   LOGIN:    '/login',
   SIGNUP:   '/signup',
-  PENDING:  '/pending',
+  PENDING:     '/pending',
+  CHECK_EMAIL: '/check-email',
 
   // Member
   DASHBOARD: '/dashboard',
@@ -143,6 +144,7 @@ export const PAGE_TITLES = {
   LOGIN:               'Pavilion · Sign In',
   SIGNUP:              'Pavilion · Join HTCC',
   PENDING:             'Pavilion · Awaiting Approval',
+  CHECK_EMAIL:         'Pavilion · Check Your Email',
   DASHBOARD:           'Pavilion · Home',
   FIXTURES:            'Pavilion · Fixtures',
   TEAMS:               'Pavilion · My Teams',

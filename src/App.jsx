@@ -19,7 +19,8 @@ import {
 import LandingPage from './pages/public/LandingPage.jsx'
 import LoginPage   from './pages/public/LoginPage.jsx'
 import SignupPage  from './pages/public/SignupPage.jsx'
-import PendingPage from './pages/public/PendingPage.jsx'
+import PendingPage    from './pages/public/PendingPage.jsx'
+import CheckEmailPage from './pages/public/CheckEmailPage.jsx'
 
 // ── Member pages ──
 import DashboardPage from './pages/member/DashboardPage.jsx'
@@ -101,6 +102,9 @@ export default function App() {
 
         {/* ── Pending approval — authenticated but not yet approved ── */}
         <Route path={ROUTES.PENDING} element={<PendingPage />} />
+
+        {/* ── Check email — shown after signup before confirmation ── */}
+        <Route path={ROUTES.CHECK_EMAIL} element={<CheckEmailPage />} />
 
         {/* ── Member routes ── */}
         <Route path={ROUTES.DASHBOARD} element={

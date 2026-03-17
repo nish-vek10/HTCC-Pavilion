@@ -76,6 +76,8 @@ export const useAuthStore = create((set, get) => ({
       email,
       password,
       options: {
+        // After email confirmation, redirect directly to /pending
+        emailRedirectTo: window.location.origin + '/pending',
         data: {
           full_name: fullName,
           phone:     phone || null,

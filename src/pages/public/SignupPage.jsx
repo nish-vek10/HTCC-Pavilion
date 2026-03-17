@@ -63,8 +63,8 @@ export default function SignupPage() {
         fullName: form.fullName,
         phone:    form.phone,
       })
-      toast.success('Account created! Awaiting admin approval.')
-      navigate(ROUTES.PENDING)
+      toast.success('Account created! Please check your email.')
+      navigate(ROUTES.CHECK_EMAIL)
     } catch (err) {
       if (err.message.includes('already registered')) {
         setError('An account with this email already exists. Try signing in.')
