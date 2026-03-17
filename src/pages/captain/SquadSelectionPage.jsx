@@ -352,8 +352,8 @@ export default function SquadSelectionPage() {
     selected.length >= 8           ? 'var(--amber)' :
     'var(--text-muted)'
 
-  // ── Publish button active ──
-  const canPublish = selected.length === SQUAD_SIZE && !saving
+  // ── Publish button active — no minimum squad size required ──
+  const canPublish = selected.length > 0 && !saving
 
   if (loading) {
     return (
@@ -694,17 +694,17 @@ export default function SquadSelectionPage() {
                 <div style={{ padding: '16px', borderTop: '1px solid var(--navy-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     onClick={handleSave}
-                    disabled={saving || selected.length === 0}
+                    disabled={saving}
                     className="btn btn--secondary"
                     style={{ width: '100%' }}
                   >
-                    {saving ? 'Saving…' : '💾 Save Draft'}
+                    {saving ? 'Saving…' : selected.length === 0 ? '🗑 Clear Squad' : '💾 Save Draft'}
                   </button>
 
                   <button
                     onClick={() => {
-                      if (selected.length < SQUAD_SIZE) {
-                        toast.error('Select all ' + SQUAD_SIZE + ' players before publishing')
+                      if (selected.length === 0) {
+                        toast.error('Add at least one player before publishing')
                         return
                       }
                       setPublishModal(true)
@@ -726,11 +726,6 @@ export default function SquadSelectionPage() {
                     🚀 Publish Squad
                   </button>
 
-                  {selected.length > 0 && selected.length < SQUAD_SIZE && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                      {SQUAD_SIZE - selected.length} more player{SQUAD_SIZE - selected.length !== 1 ? 's' : ''} needed to publish
-                    </div>
-                  )}
                   {!isPublished && (
                     <div style={{ fontSize: '11px', color: 'var(--text-faint)', textAlign: 'center', marginTop: '4px' }}>
                       Tap a player in the squad to assign Captain or WK role
