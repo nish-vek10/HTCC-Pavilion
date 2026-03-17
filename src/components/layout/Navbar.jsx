@@ -87,7 +87,10 @@ export default function Navbar() {
       }}>
 
         {/* ── Left: Pavilion identity ── */}
-        <Link to={ROUTES.DASHBOARD} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Link
+          to={isAdmin() ? ROUTES.ADMIN_DASHBOARD : ROUTES.DASHBOARD}
+          style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}
+        >
           <img
             src="/assets/images/pavilion-icon.png"
             alt="Pavilion"

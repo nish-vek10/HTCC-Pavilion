@@ -26,11 +26,12 @@ const CAPTAIN_TABS = [
 ]
 
 const ADMIN_TABS = [
-  { label: 'Overview', path: ROUTES.ADMIN_DASHBOARD,     icon: '📊' },
-  { label: 'Matchday', path: '/admin/matchday',          icon: '⚡' },
-  { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅' },
-  { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥' },
-  { label: 'Announce', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '📢' },
+  { label: 'Overview', path: ROUTES.ADMIN_DASHBOARD,     icon: null  },  // HTCC crest — mirrors native CrestIcon
+  { label: 'Matchday', path: '/admin/matchday',          icon: '🏏'  },  // matches native
+  { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅'  },
+  { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥'  },
+  { label: 'Announce', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '📢'  },
+  { label: 'Profile',  path: ROUTES.PROFILE,             icon: '👤'  },  // avatar initials
 ]
 
 export default function BottomTabBar() {
@@ -106,7 +107,7 @@ export default function BottomTabBar() {
 
             {/* Icon — three cases: HTCC crest (Teams), avatar circle (Profile), emoji (all others) */}
             {tab.icon === null ? (
-              // HTCC crest — Teams tab
+              // HTCC crest — Teams tab (member) and Overview tab (admin), mirrors native CrestIcon
               <div style={{
                 width: '24px', height: '24px',
                 borderRadius: '50%',

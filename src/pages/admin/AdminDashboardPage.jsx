@@ -58,17 +58,19 @@ export default function AdminDashboardPage() {
   }
 
   // ── Fetch overview stats ──
+  // pending = membership approvals + team join requests combined — both need action
   const fetchStats = async () => {
-    const [members, pendingCount, fixtureCount] = await Promise.all([
+    const [members, pendingMembers, pendingJoins, fixtureCount] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'pending'),
       supabase.from('profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
+      supabase.from('join_requests').select('id', { count: 'exact' }).eq('status', 'pending'),
       supabase.from('fixtures').select('id', { count: 'exact' })
         .gte('match_date', toLocalISO(new Date())),
     ])
     setStats({
-      members:  members.count  || 0,
-      pending:  pendingCount.count || 0,
-      fixtures: fixtureCount.count || 0,
+      members:  members.count       || 0,
+      pending:  (pendingMembers.count || 0) + (pendingJoins.count || 0),
+      fixtures: fixtureCount.count  || 0,
       teams:    5,
     })
   }
@@ -234,7 +236,7 @@ export default function AdminDashboardPage() {
         }}>
           {[
             { label: 'Active Members', value: stats.members,  color: 'var(--green)',       icon: '👥' },
-            { label: 'Pending Approval', value: stats.pending,  color: 'var(--amber)',       icon: '⏳', urgent: stats.pending > 0 },
+            { label: 'Actions Required', value: stats.pending,  color: 'var(--amber)',       icon: '⏳', urgent: stats.pending > 0 },
             { label: 'Upcoming Fixtures', value: stats.fixtures, color: 'var(--gold)',        icon: '📅' },
             { label: 'Active Teams',    value: stats.teams,    color: 'var(--text-muted)',   icon: '🏏' },
           ].map(stat => (

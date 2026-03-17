@@ -137,6 +137,100 @@ export default function ProfilePage() {
           </h1>
         </div>
 
+        {/* ── Admin Panel button — shown for admin/superadmin in member view ── */}
+        {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
+          <div
+            onClick={() => navigate(ROUTES.ADMIN_DASHBOARD)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '12px', cursor: 'pointer',
+              background: 'rgba(96,165,250,0.06)',
+              border: '1px solid rgba(96,165,250,0.3)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 18px', marginBottom: '12px',
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(96,165,250,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(96,165,250,0.06)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '22px' }}>⚙️</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                  Admin Panel
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Members · Fixtures · Matchday · Announcements
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '20px', color: '#60A5FA' }}>›</span>
+          </div>
+        )}
+
+        {/* ── Captain Panel button — shown for captains in member view ── */}
+        {profile?.role === 'captain' && (
+          <div
+            onClick={() => navigate('/captain/fixtures')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '12px', cursor: 'pointer',
+              background: 'rgba(34,197,94,0.06)',
+              border: '1px solid rgba(34,197,94,0.3)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 18px', marginBottom: '12px',
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,197,94,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(34,197,94,0.06)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '22px' }}>🏏</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                  Captain Panel
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Fixtures · Squad Selection
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '20px', color: 'var(--green)' }}>›</span>
+          </div>
+        )}
+
+        {/* ── Back to Member View — shown when admin accesses profile via admin tabs ──
+            Mirrors native AdminPanelProfileScreen "Back to Member View" button ── */}
+        {(profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.role === 'captain') && (
+          <div
+            onClick={() => navigate(ROUTES.DASHBOARD)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '12px', cursor: 'pointer',
+              background: 'rgba(245,197,24,0.06)',
+              border: '1px solid rgba(245,197,24,0.25)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 18px', marginBottom: '24px',
+              transition: 'var(--transition)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,197,24,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(245,197,24,0.06)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '22px' }}>⚡</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                  Back to Member View
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Home · Fixtures · Teams · Alerts
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: '20px', color: 'var(--gold)' }}>›</span>
+          </div>
+        )}
+
         {/* ── Profile card ── */}
         <div className="card" style={{ padding: '32px', marginBottom: '24px' }}>
 
