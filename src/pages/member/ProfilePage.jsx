@@ -32,10 +32,14 @@ export default function ProfilePage() {
   const location      = useLocation()
   const profile       = useAuthStore(state => state.profile)
 
-  // ── Detect whether we arrived from admin tabs or member tabs ──────────────
-  // fromAdmin=true → show "Back to Member View" only
-  // fromAdmin=false → show "Admin Panel" / "Captain Panel" only
-  const fromAdmin = location.state?.fromAdmin === true
+  // ── Detect admin vs member context from URL path ──────────────────────────
+  // Mirrors native: AdminPanelProfileScreen (in AdminNavigator) vs
+  //                 ProfileScreen (in MemberNavigator)
+  // /admin/* or /captain/* → admin/captain panel context → show "Back to Member View"
+  // /profile (member path) → member context → show "Admin Panel" or "Captain Panel"
+  const inAdminPanel   = location.pathname.startsWith('/admin')
+  const inCaptainPanel = location.pathname.startsWith('/captain')
+  const fromAdmin      = inAdminPanel || inCaptainPanel
   const updateProfile = useAuthStore(state => state.updateProfile)
   const signOut       = useAuthStore(state => state.signOut)
   const user          = useAuthStore(state => state.user)

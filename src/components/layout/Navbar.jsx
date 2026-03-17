@@ -275,7 +275,14 @@ export default function Navbar() {
                   ...(isAdmin() ? [{ label: '⚙️  Admin Panel', path: ROUTES.ADMIN_DASHBOARD }] : []),
                 ].map(item => (
                   <button key={item.path}
-                    onClick={() => { navigate(item.path); setProfileOpen(false) }}
+                    onClick={() => {
+                      // If admin clicks "My Profile" while in admin panel, navigate
+                      // back to /admin/profile-equivalent so URL context is preserved.
+                      // We stay on /profile but the BottomTabBar Profile tab from admin
+                      // panel handles context — navbar profile always goes to /profile
+                      navigate(item.path)
+                      setProfileOpen(false)
+                    }}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left',
                       padding: '9px 12px', borderRadius: 'var(--radius-md)',

@@ -144,6 +144,15 @@ export default function App() {
           <MemberRoute><MatchConfirmationPage /></MemberRoute>
         } />
 
+        {/* ── Admin/Captain panel profile — same ProfilePage, /admin/* path
+            triggers fromAdmin=true in ProfilePage → shows Back to Member View ── */}
+        <Route path="/admin/profile" element={
+          <AdminRoute><ProfilePage /></AdminRoute>
+        } />
+        <Route path="/captain/profile" element={
+          <CaptainRoute><ProfilePage /></CaptainRoute>
+        } />
+
         {/* ── Catch-all ── */}
         <Route path="*" element={<Navigate to={ROUTES.LANDING} replace />} />
       </Routes>

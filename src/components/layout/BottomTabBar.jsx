@@ -22,7 +22,7 @@ const CAPTAIN_TABS = [
   { label: 'Fixtures', path: '/captain/fixtures',   icon: '📅'  },
   { label: 'Teams',    path: ROUTES.TEAMS,          icon: null  },  // HTCC crest
   { label: 'Alerts',   path: ROUTES.NOTIFICATIONS,  icon: '🔔'  },
-  { label: 'Profile',  path: ROUTES.PROFILE,        icon: '👤'  },
+  { label: 'Profile',  path: '/captain/profile',    icon: '👤'  },  // distinct path → fromAdmin=true
 ]
 
 const ADMIN_TABS = [
@@ -31,7 +31,7 @@ const ADMIN_TABS = [
   { label: 'Fixtures', path: ROUTES.ADMIN_FIXTURES,      icon: '📅'  },
   { label: 'Members',  path: ROUTES.ADMIN_MEMBERS,       icon: '👥'  },
   { label: 'Announce', path: ROUTES.ADMIN_ANNOUNCEMENTS, icon: '📢'  },
-  { label: 'Profile',  path: ROUTES.PROFILE,             icon: '👤'  },  // avatar initials
+  { label: 'Profile',  path: '/admin/profile',           icon: '👤'  },  // distinct path → fromAdmin=true
 ]
 
 export default function BottomTabBar() {
@@ -77,9 +77,7 @@ export default function BottomTabBar() {
           <button
             key={tab.path}
             onClick={() => {
-              // Pass fromAdmin context so ProfilePage knows which button to show
-              const state = (isAdmin() && tab.label === 'Profile') ? { fromAdmin: true } : undefined
-              navigate(tab.path, { state })
+              navigate(tab.path)
               window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
             style={{
