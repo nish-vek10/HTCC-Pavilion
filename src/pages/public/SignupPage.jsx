@@ -6,39 +6,53 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore.js'
 import { APP_NAME, CLUB_NAME, PAGE_TITLES, ROUTES } from '../../lib/constants.js'
 
-// ─── CONFIGURABLE: Phone country codes ────────────────────────────────────────
+// ─── CONFIGURABLE: Phone country codes — iso used for flagcdn.com images ──────
 const PHONE_CODES = [
-  { code: '+44',  flag: '🇬🇧', label: 'United Kingdom' },
-  { code: '+1',   flag: '🇺🇸', label: 'United States' },
-  { code: '+1',   flag: '🇨🇦', label: 'Canada' },
-  { code: '+91',  flag: '🇮🇳', label: 'India' },
-  { code: '+92',  flag: '🇵🇰', label: 'Pakistan' },
-  { code: '+880', flag: '🇧🇩', label: 'Bangladesh' },
-  { code: '+94',  flag: '🇱🇰', label: 'Sri Lanka' },
-  { code: '+971', flag: '🇦🇪', label: 'UAE' },
-  { code: '+966', flag: '🇸🇦', label: 'Saudi Arabia' },
-  { code: '+27',  flag: '🇿🇦', label: 'South Africa' },
-  { code: '+254', flag: '🇰🇪', label: 'Kenya' },
-  { code: '+234', flag: '🇳🇬', label: 'Nigeria' },
-  { code: '+61',  flag: '🇦🇺', label: 'Australia' },
-  { code: '+64',  flag: '🇳🇿', label: 'New Zealand' },
-  { code: '+33',  flag: '🇫🇷', label: 'France' },
-  { code: '+49',  flag: '🇩🇪', label: 'Germany' },
-  { code: '+34',  flag: '🇪🇸', label: 'Spain' },
-  { code: '+39',  flag: '🇮🇹', label: 'Italy' },
-  { code: '+31',  flag: '🇳🇱', label: 'Netherlands' },
-  { code: '+351', flag: '🇵🇹', label: 'Portugal' },
-  { code: '+353', flag: '🇮🇪', label: 'Ireland' },
-  { code: '+212', flag: '🇲🇦', label: 'Morocco' },
-  { code: '+20',  flag: '🇪🇬', label: 'Egypt' },
-  { code: '+60',  flag: '🇲🇾', label: 'Malaysia' },
-  { code: '+65',  flag: '🇸🇬', label: 'Singapore' },
-  { code: '+86',  flag: '🇨🇳', label: 'China' },
-  { code: '+81',  flag: '🇯🇵', label: 'Japan' },
-  { code: '+82',  flag: '🇰🇷', label: 'South Korea' },
-  { code: '+55',  flag: '🇧🇷', label: 'Brazil' },
-  { code: '+52',  flag: '🇲🇽', label: 'Mexico' },
+  { code: '+44',  iso: 'gb', label: 'United Kingdom' },
+  { code: '+1',   iso: 'us', label: 'United States' },
+  { code: '+1',   iso: 'ca', label: 'Canada' },
+  { code: '+91',  iso: 'in', label: 'India' },
+  { code: '+92',  iso: 'pk', label: 'Pakistan' },
+  { code: '+880', iso: 'bd', label: 'Bangladesh' },
+  { code: '+94',  iso: 'lk', label: 'Sri Lanka' },
+  { code: '+971', iso: 'ae', label: 'UAE' },
+  { code: '+966', iso: 'sa', label: 'Saudi Arabia' },
+  { code: '+27',  iso: 'za', label: 'South Africa' },
+  { code: '+254', iso: 'ke', label: 'Kenya' },
+  { code: '+234', iso: 'ng', label: 'Nigeria' },
+  { code: '+61',  iso: 'au', label: 'Australia' },
+  { code: '+64',  iso: 'nz', label: 'New Zealand' },
+  { code: '+33',  iso: 'fr', label: 'France' },
+  { code: '+49',  iso: 'de', label: 'Germany' },
+  { code: '+34',  iso: 'es', label: 'Spain' },
+  { code: '+39',  iso: 'it', label: 'Italy' },
+  { code: '+31',  iso: 'nl', label: 'Netherlands' },
+  { code: '+351', iso: 'pt', label: 'Portugal' },
+  { code: '+353', iso: 'ie', label: 'Ireland' },
+  { code: '+212', iso: 'ma', label: 'Morocco' },
+  { code: '+20',  iso: 'eg', label: 'Egypt' },
+  { code: '+60',  iso: 'my', label: 'Malaysia' },
+  { code: '+65',  iso: 'sg', label: 'Singapore' },
+  { code: '+86',  iso: 'cn', label: 'China' },
+  { code: '+81',  iso: 'jp', label: 'Japan' },
+  { code: '+82',  iso: 'kr', label: 'South Korea' },
+  { code: '+55',  iso: 'br', label: 'Brazil' },
+  { code: '+52',  iso: 'mx', label: 'Mexico' },
 ]
+
+// ── Flag image helper — uses flagcdn.com ──────────────────────────────────────
+function FlagImg({ iso, size = 20 }) {
+  return (
+    <img
+      src={`https://flagcdn.com/w${size}/${iso}.png`}
+      srcSet={`https://flagcdn.com/w${size * 2}/${iso}.png 2x`}
+      width={size}
+      height={Math.round(size * 0.75)}
+      alt={iso.toUpperCase()}
+      style={{ borderRadius: '2px', objectFit: 'cover', flexShrink: 0 }}
+    />
+  )
+}
 
 // ── Custom phone code dropdown with search ────────────────────────────────────
 function PhoneCodeDropdown({ value, onChange, disabled }) {
@@ -46,7 +60,7 @@ function PhoneCodeDropdown({ value, onChange, disabled }) {
   const [search, setSearch] = useState('')
   const ref = React.useRef(null)
 
-  const selected = PHONE_CODES.find(c => c.code === value && c.label.includes('United Kingdom'))
+  const selected = PHONE_CODES.find(c => c.code === value && c.iso === 'gb')
     || PHONE_CODES.find(c => c.code === value)
     || PHONE_CODES[0]
 
@@ -82,7 +96,7 @@ function PhoneCodeDropdown({ value, onChange, disabled }) {
           fontSize: '14px',
         }}
       >
-        <span style={{ fontSize: '20px', lineHeight: 1 }}>{selected.flag}</span>
+        <FlagImg iso={selected.iso} size={20} />
         <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>{selected.code}</span>
         <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-muted)' }}>▼</span>
       </button>
@@ -143,7 +157,7 @@ function PhoneCodeDropdown({ value, onChange, disabled }) {
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                 onMouseLeave={e => e.currentTarget.style.background = c.code === value ? 'rgba(245,197,24,0.08)' : 'transparent'}
               >
-                <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>{c.flag}</span>
+                <FlagImg iso={c.iso} size={18} />
                 <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{c.label}</span>
                 <span style={{ fontSize: '12px', color: 'var(--gold)', fontWeight: 700 }}>{c.code}</span>
               </button>
