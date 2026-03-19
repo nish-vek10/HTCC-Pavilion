@@ -140,10 +140,11 @@ export default function AdminMembersPage() {
     if (newRole === 'member') {
       try {
         const firstName = memberName?.split(' ')[0] || memberName
-        // Get email from already-loaded members list — avoids second DB call
         const memberInList = members.find(m => m.id === memberId)
         const memberEmail  = memberInList?.email
 
+        // Visible toast confirms this code path is reached
+        toast(`[Debug] email: ${memberEmail || 'NOT FOUND'}`, { icon: '🔍', duration: 8000 })
         console.log('[Approval] memberId:', memberId, 'email:', memberEmail, 'firstName:', firstName)
 
         if (!memberEmail) {
