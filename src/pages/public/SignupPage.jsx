@@ -44,12 +44,16 @@ const PHONE_CODES = [
 function FlagImg({ iso, size = 20 }) {
   return (
     <img
-      src={`https://flagcdn.com/w${size}/${iso}.png`}
-      srcSet={`https://flagcdn.com/w${size * 2}/${iso}.png 2x`}
-      width={size}
-      height={Math.round(size * 0.75)}
+      src={`https://flagcdn.com/w40/${iso}.png`}
       alt={iso.toUpperCase()}
-      style={{ borderRadius: '2px', objectFit: 'cover', flexShrink: 0 }}
+      style={{
+        width: `${size}px`,
+        height: `${Math.round(size * 0.75)}px`,
+        borderRadius: '2px',
+        objectFit: 'cover',
+        flexShrink: 0,
+        display: 'block',
+      }}
     />
   )
 }
@@ -146,18 +150,19 @@ function PhoneCodeDropdown({ value, onChange, disabled }) {
                 onClick={() => { onChange(c.code); setOpen(false) }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px 12px',
+                  padding: '10px 14px',
                   background: c.code === value ? 'rgba(245,197,24,0.08)' : 'transparent',
                   border: 'none',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'background 0.1s',
+                  overflow: 'visible',
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                 onMouseLeave={e => e.currentTarget.style.background = c.code === value ? 'rgba(245,197,24,0.08)' : 'transparent'}
               >
-                <FlagImg iso={c.iso} size={18} />
+                <FlagImg iso={c.iso} size={24} />
                 <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{c.label}</span>
                 <span style={{ fontSize: '12px', color: 'var(--gold)', fontWeight: 700 }}>{c.code}</span>
               </button>
