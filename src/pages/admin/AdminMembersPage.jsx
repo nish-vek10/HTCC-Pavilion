@@ -138,13 +138,28 @@ export default function AdminMembersPage() {
 
     // ── Send approval email via Edge Function ─────────────────────────────
     if (newRole === 'member') {
-      const firstName = memberName?.split(' ')[0] || memberName
-      const { data: memberProfile } = await supabase
-        .from('profiles').select('email').eq('id', memberId).single()
-      if (memberProfile?.email) {
-        supabase.functions.invoke('send-approval-email', {
-          body: { email: memberProfile.email, firstName },
-        }).catch(err => console.warn('[Approval email] failed:', err.message))
+      try {
+        const firstName = memberName?.split(' ')[0] || memberName
+
+        // Fetch email from profiles
+        const { data: memberProfile, error: profileErr } = await supabase
+          .from('profiles').select('email').eq('id', memberId).single()
+
+        console.log('[Approval] memberProfile:', memberProfile, 'error:', profileErr)
+
+        if (!memberProfile?.email) {
+          console.warn('[Approval] No email found for member:', memberId)
+        } else {
+          console.log('[Approval] Invoking edge function for:', memberProfile.email)
+          const { data: fnData, error: fnErr } = await supabase.functions.invoke(
+            'send-approval-email',
+            { body: { email: memberProfile.email, firstName } }
+          )
+          console.log('[Approval] Function result:', fnData, 'error:', fnErr)
+          if (fnErr) console.error('[Approval] Edge function error:', fnErr)
+        }
+      } catch (err) {
+        console.error('[Approval] Unexpected error:', err.message)
       }
     }
   }
