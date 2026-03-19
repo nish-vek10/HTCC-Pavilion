@@ -71,16 +71,16 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // ── Sign up ────────────────────────────────────
-  signUp: async ({ email, password, fullName, phone }) => {
+  signUp: async ({ email, password, fullName, phone, phoneCode }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        // After email confirmation, redirect directly to /pending
         emailRedirectTo: window.location.origin + '/pending',
         data: {
-          full_name: fullName,
-          phone:     phone || null,
+          full_name:  fullName,
+          phone:      phone || null,
+          phone_code: phoneCode || '+44',
         },
       },
     })

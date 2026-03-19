@@ -4,64 +4,115 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore.js'
-import { APP_NAME, CLUB_NAME, CLUB_SHORT, PAGE_TITLES, ROUTES } from '../../lib/constants.js'
+import { APP_NAME, CLUB_NAME, PAGE_TITLES, ROUTES } from '../../lib/constants.js'
+
+// ─── CONFIGURABLE: Phone country codes ────────────────────────────────────────
+const PHONE_CODES = [
+  { code: '+44',  flag: '🇬🇧', label: 'UK' },
+  { code: '+1',   flag: '🇺🇸', label: 'US' },
+  { code: '+1',   flag: '🇨🇦', label: 'CA' },
+  { code: '+91',  flag: '🇮🇳', label: 'IN' },
+  { code: '+92',  flag: '🇵🇰', label: 'PK' },
+  { code: '+880', flag: '🇧🇩', label: 'BD' },
+  { code: '+94',  flag: '🇱🇰', label: 'LK' },
+  { code: '+971', flag: '🇦🇪', label: 'AE' },
+  { code: '+966', flag: '🇸🇦', label: 'SA' },
+  { code: '+27',  flag: '🇿🇦', label: 'ZA' },
+  { code: '+254', flag: '🇰🇪', label: 'KE' },
+  { code: '+234', flag: '🇳🇬', label: 'NG' },
+  { code: '+61',  flag: '🇦🇺', label: 'AU' },
+  { code: '+64',  flag: '🇳🇿', label: 'NZ' },
+  { code: '+33',  flag: '🇫🇷', label: 'FR' },
+  { code: '+49',  flag: '🇩🇪', label: 'DE' },
+  { code: '+34',  flag: '🇪🇸', label: 'ES' },
+  { code: '+39',  flag: '🇮🇹', label: 'IT' },
+  { code: '+31',  flag: '🇳🇱', label: 'NL' },
+  { code: '+351', flag: '🇵🇹', label: 'PT' },
+  { code: '+353', flag: '🇮🇪', label: 'IE' },
+  { code: '+355', flag: '🇦🇱', label: 'AL' },
+  { code: '+212', flag: '🇲🇦', label: 'MA' },
+  { code: '+20',  flag: '🇪🇬', label: 'EG' },
+  { code: '+60',  flag: '🇲🇾', label: 'MY' },
+  { code: '+65',  flag: '🇸🇬', label: 'SG' },
+  { code: '+86',  flag: '🇨🇳', label: 'CN' },
+  { code: '+81',  flag: '🇯🇵', label: 'JP' },
+  { code: '+82',  flag: '🇰🇷', label: 'KR' },
+  { code: '+55',  flag: '🇧🇷', label: 'BR' },
+  { code: '+52',  flag: '🇲🇽', label: 'MX' },
+]
 
 export default function SignupPage() {
   const navigate = useNavigate()
   const signUp   = useAuthStore(state => state.signUp)
 
   const [form, setForm] = useState({
-    fullName:  '',
-    email:     '',
-    phone:     '',
-    password:  '',
-    confirmPw: '',
+    fullName:    '',
+    email:       '',
+    phoneCode:   '+44',
+    phoneNumber: '',
+    password:    '',
+    confirmPw:   '',
   })
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState('')
-  const [showPw,   setShowPw]   = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+  const [showPw,  setShowPw]  = useState(false)
 
-  // ── Set browser tab title ──
-  useEffect(() => {
-    document.title = PAGE_TITLES.SIGNUP
-  }, [])
+  useEffect(() => { document.title = PAGE_TITLES.SIGNUP }, [])
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  // ── Password strength indicator ────────────────
+  // ── Password requirements ──────────────────────────────────────────────────
+  const pwChecks = {
+    hasUpper: /[A-Z]/.test(form.password),
+    hasLower: /[a-z]/.test(form.password),
+    hasDigit: /[0-9]/.test(form.password),
+    hasLength: form.password.length >= 8,
+  }
+  const allChecksPassed = Object.values(pwChecks).every(Boolean)
+
+  // ── Password strength bar ──────────────────────────────────────────────────
   const pwStrength = () => {
     const p = form.password
     if (!p) return null
-    if (p.length < 6)  return { label: 'Too short',  color: '#EF4444', width: '25%' }
-    if (p.length < 8)  return { label: 'Weak',       color: '#F97316', width: '50%' }
-    if (p.length < 12) return { label: 'Good',       color: '#F5C518', width: '75%' }
-    return               { label: 'Strong',           color: '#22C55E', width: '100%' }
+    const score = [pwChecks.hasUpper, pwChecks.hasLower, pwChecks.hasDigit, pwChecks.hasLength].filter(Boolean).length
+    if (score <= 1) return { label: 'Too weak',  color: '#EF4444', width: '25%' }
+    if (score === 2) return { label: 'Weak',      color: '#F97316', width: '50%' }
+    if (score === 3) return { label: 'Good',      color: '#F5C518', width: '75%' }
+    return              { label: 'Strong',        color: '#22C55E', width: '100%' }
   }
   const strength = pwStrength()
 
-  // ── Handle sign up ──────────────────────────────
+  // ── Handle sign up ─────────────────────────────────────────────────────────
   const handleSignup = async (e) => {
     e.preventDefault()
     setError('')
 
+    if (!form.phoneNumber.trim()) {
+      setError('Phone number is required.')
+      return
+    }
     if (form.password !== form.confirmPw) {
       setError('Passwords do not match.')
       return
     }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.')
+    if (!allChecksPassed) {
+      setError('Password must meet all requirements below.')
       return
     }
+
+    // Combine code + number for storage e.g. "+447307608332"
+    const fullPhone = form.phoneCode + form.phoneNumber.replace(/^0/, '')
 
     setLoading(true)
     try {
       await signUp({
-        email:    form.email,
-        password: form.password,
-        fullName: form.fullName,
-        phone:    form.phone,
+        email:     form.email,
+        password:  form.password,
+        fullName:  form.fullName,
+        phone:     fullPhone,
+        phoneCode: form.phoneCode,
       })
       toast.success('Account created! Please check your email.')
       navigate(ROUTES.CHECK_EMAIL)
@@ -93,7 +144,6 @@ export default function SignupPage() {
 
         {/* ── Logo + heading ── */}
         <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-          {/* Gold-ringed HTCC crest */}
           <div style={{
             width: '80px', height: '80px', borderRadius: '50%',
             background: '#0D1B2A',
@@ -103,11 +153,8 @@ export default function SignupPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 20px',
           }}>
-            <img
-              src="/assets/images/htcc-logo.png"
-              alt="HTCC"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }}
-            />
+            <img src="/assets/images/htcc-logo.png" alt="HTCC"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%', mixBlendMode: 'screen' }} />
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', letterSpacing: '2px' }}>
             Join {APP_NAME}
@@ -118,7 +165,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        {/* Form card */}
+        {/* ── Form card ── */}
         <div className="card" style={{ padding: '32px' }}>
 
           {error && (
@@ -133,6 +180,8 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleSignup}>
+
+            {/* Full Name */}
             <div style={{ marginBottom: '16px' }}>
               <label className="input-label">Full Name</label>
               <input className="input" name="fullName" type="text"
@@ -141,6 +190,7 @@ export default function SignupPage() {
                 required disabled={loading} />
             </div>
 
+            {/* Email */}
             <div style={{ marginBottom: '16px' }}>
               <label className="input-label">Email</label>
               <input className="input" name="email" type="email"
@@ -149,19 +199,54 @@ export default function SignupPage() {
                 required disabled={loading} autoComplete="email" />
             </div>
 
+            {/* Phone — split code + number */}
             <div style={{ marginBottom: '16px' }}>
-              <label className="input-label">
-                Phone{' '}
-                <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-                  (optional)
-                </span>
-              </label>
-              <input className="input" name="phone" type="tel"
-                placeholder="+44 7700 000000"
-                value={form.phone} onChange={handleChange}
-                disabled={loading} />
+              <label className="input-label">Phone Number</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+
+                {/* Country code dropdown */}
+                <select
+                  name="phoneCode"
+                  value={form.phoneCode}
+                  onChange={handleChange}
+                  disabled={loading}
+                  style={{
+                    flexShrink: 0, width: '110px',
+                    padding: '12px 8px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--navy-border)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    colorScheme: 'dark',
+                  }}
+                >
+                  {PHONE_CODES.map((c, i) => (
+                    <option key={i} value={c.code}>
+                      {c.flag} {c.code}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Number input */}
+                <input
+                  className="input"
+                  name="phoneNumber"
+                  type="tel"
+                  placeholder="07123 456 789"
+                  value={form.phoneNumber}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                  style={{ flex: 1, margin: 0 }}
+                />
+              </div>
             </div>
 
+            {/* Password */}
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label className="input-label" style={{ marginBottom: 0 }}>Password</label>
@@ -178,7 +263,7 @@ export default function SignupPage() {
 
             {/* Password strength bar */}
             {strength && (
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '8px' }}>
                 <div style={{ height: '4px', background: 'var(--navy-light)', borderRadius: '2px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: strength.width, background: strength.color, transition: 'all 0.3s', borderRadius: '2px' }} />
                 </div>
@@ -188,6 +273,37 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* Password requirements checklist */}
+            {form.password.length > 0 && (
+              <div style={{
+                marginBottom: '16px', padding: '12px 14px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--navy-border)',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex', flexDirection: 'column', gap: '6px',
+              }}>
+                {[
+                  { key: 'hasUpper',  label: 'At least one uppercase letter' },
+                  { key: 'hasLower',  label: 'At least one lowercase letter' },
+                  { key: 'hasDigit',  label: 'At least one number' },
+                  { key: 'hasLength', label: 'Minimum 8 characters' },
+                ].map(req => (
+                  <div key={req.key} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    fontSize: '12px',
+                    color: pwChecks[req.key] ? '#22C55E' : 'var(--text-faint)',
+                    transition: 'color 0.2s',
+                  }}>
+                    <span style={{ fontSize: '10px' }}>
+                      {pwChecks[req.key] ? '✓' : '○'}
+                    </span>
+                    {req.label}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Confirm Password */}
             <div style={{ marginBottom: '28px' }}>
               <label className="input-label">Confirm Password</label>
               <input className="input" name="confirmPw" type={showPw ? 'text' : 'password'}
