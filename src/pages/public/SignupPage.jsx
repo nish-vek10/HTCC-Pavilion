@@ -1,6 +1,6 @@
 // pavilion-web/src/pages/public/SignupPage.jsx
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../../store/authStore.js'
@@ -8,38 +8,152 @@ import { APP_NAME, CLUB_NAME, PAGE_TITLES, ROUTES } from '../../lib/constants.js
 
 // ─── CONFIGURABLE: Phone country codes ────────────────────────────────────────
 const PHONE_CODES = [
-  { code: '+44',  flag: '🇬🇧', label: 'UK' },
-  { code: '+1',   flag: '🇺🇸', label: 'US' },
-  { code: '+1',   flag: '🇨🇦', label: 'CA' },
-  { code: '+91',  flag: '🇮🇳', label: 'IN' },
-  { code: '+92',  flag: '🇵🇰', label: 'PK' },
-  { code: '+880', flag: '🇧🇩', label: 'BD' },
-  { code: '+94',  flag: '🇱🇰', label: 'LK' },
-  { code: '+971', flag: '🇦🇪', label: 'AE' },
-  { code: '+966', flag: '🇸🇦', label: 'SA' },
-  { code: '+27',  flag: '🇿🇦', label: 'ZA' },
-  { code: '+254', flag: '🇰🇪', label: 'KE' },
-  { code: '+234', flag: '🇳🇬', label: 'NG' },
-  { code: '+61',  flag: '🇦🇺', label: 'AU' },
-  { code: '+64',  flag: '🇳🇿', label: 'NZ' },
-  { code: '+33',  flag: '🇫🇷', label: 'FR' },
-  { code: '+49',  flag: '🇩🇪', label: 'DE' },
-  { code: '+34',  flag: '🇪🇸', label: 'ES' },
-  { code: '+39',  flag: '🇮🇹', label: 'IT' },
-  { code: '+31',  flag: '🇳🇱', label: 'NL' },
-  { code: '+351', flag: '🇵🇹', label: 'PT' },
-  { code: '+353', flag: '🇮🇪', label: 'IE' },
-  { code: '+355', flag: '🇦🇱', label: 'AL' },
-  { code: '+212', flag: '🇲🇦', label: 'MA' },
-  { code: '+20',  flag: '🇪🇬', label: 'EG' },
-  { code: '+60',  flag: '🇲🇾', label: 'MY' },
-  { code: '+65',  flag: '🇸🇬', label: 'SG' },
-  { code: '+86',  flag: '🇨🇳', label: 'CN' },
-  { code: '+81',  flag: '🇯🇵', label: 'JP' },
-  { code: '+82',  flag: '🇰🇷', label: 'KR' },
-  { code: '+55',  flag: '🇧🇷', label: 'BR' },
-  { code: '+52',  flag: '🇲🇽', label: 'MX' },
+  { code: '+44',  flag: '🇬🇧', label: 'United Kingdom' },
+  { code: '+1',   flag: '🇺🇸', label: 'United States' },
+  { code: '+1',   flag: '🇨🇦', label: 'Canada' },
+  { code: '+91',  flag: '🇮🇳', label: 'India' },
+  { code: '+92',  flag: '🇵🇰', label: 'Pakistan' },
+  { code: '+880', flag: '🇧🇩', label: 'Bangladesh' },
+  { code: '+94',  flag: '🇱🇰', label: 'Sri Lanka' },
+  { code: '+971', flag: '🇦🇪', label: 'UAE' },
+  { code: '+966', flag: '🇸🇦', label: 'Saudi Arabia' },
+  { code: '+27',  flag: '🇿🇦', label: 'South Africa' },
+  { code: '+254', flag: '🇰🇪', label: 'Kenya' },
+  { code: '+234', flag: '🇳🇬', label: 'Nigeria' },
+  { code: '+61',  flag: '🇦🇺', label: 'Australia' },
+  { code: '+64',  flag: '🇳🇿', label: 'New Zealand' },
+  { code: '+33',  flag: '🇫🇷', label: 'France' },
+  { code: '+49',  flag: '🇩🇪', label: 'Germany' },
+  { code: '+34',  flag: '🇪🇸', label: 'Spain' },
+  { code: '+39',  flag: '🇮🇹', label: 'Italy' },
+  { code: '+31',  flag: '🇳🇱', label: 'Netherlands' },
+  { code: '+351', flag: '🇵🇹', label: 'Portugal' },
+  { code: '+353', flag: '🇮🇪', label: 'Ireland' },
+  { code: '+212', flag: '🇲🇦', label: 'Morocco' },
+  { code: '+20',  flag: '🇪🇬', label: 'Egypt' },
+  { code: '+60',  flag: '🇲🇾', label: 'Malaysia' },
+  { code: '+65',  flag: '🇸🇬', label: 'Singapore' },
+  { code: '+86',  flag: '🇨🇳', label: 'China' },
+  { code: '+81',  flag: '🇯🇵', label: 'Japan' },
+  { code: '+82',  flag: '🇰🇷', label: 'South Korea' },
+  { code: '+55',  flag: '🇧🇷', label: 'Brazil' },
+  { code: '+52',  flag: '🇲🇽', label: 'Mexico' },
 ]
+
+// ── Custom phone code dropdown with search ────────────────────────────────────
+function PhoneCodeDropdown({ value, onChange, disabled }) {
+  const [open,   setOpen]   = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = React.useRef(null)
+
+  const selected = PHONE_CODES.find(c => c.code === value && c.label.includes('United Kingdom'))
+    || PHONE_CODES.find(c => c.code === value)
+    || PHONE_CODES[0]
+
+  const filtered = PHONE_CODES.filter(c =>
+    c.label.toLowerCase().includes(search.toLowerCase()) ||
+    c.code.includes(search)
+  )
+
+  // Close on outside click
+  React.useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0, width: '120px' }}>
+
+      {/* Trigger button */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => { setOpen(v => !v); setSearch('') }}
+        style={{
+          width: '100%', height: '46px',
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '0 10px',
+          background: 'var(--bg-input)',
+          border: `1px solid ${open ? 'rgba(245,197,24,0.5)' : 'var(--navy-border)'}`,
+          borderRadius: 'var(--radius-md)',
+          cursor: 'pointer',
+          color: 'var(--text-primary)',
+          fontSize: '14px',
+        }}
+      >
+        <span style={{ fontSize: '20px', lineHeight: 1 }}>{selected.flag}</span>
+        <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>{selected.code}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--text-muted)' }}>▼</span>
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+          width: '240px', zIndex: 9999,
+          background: '#1A2F4A',
+          border: '1px solid rgba(245,197,24,0.2)',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
+        }}>
+          {/* Search */}
+          <div style={{ padding: '8px' }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="🔍  Search country or code…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '8px 10px',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid var(--navy-border)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '12px', outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Options list — 5 visible, scrollable */}
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                No results
+              </div>
+            ) : filtered.map((c, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => { onChange(c.code); setOpen(false) }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px',
+                  background: c.code === value ? 'rgba(245,197,24,0.08)' : 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                onMouseLeave={e => e.currentTarget.style.background = c.code === value ? 'rgba(245,197,24,0.08)' : 'transparent'}
+              >
+                <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>{c.flag}</span>
+                <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{c.label}</span>
+                <span style={{ fontSize: '12px', color: 'var(--gold)', fontWeight: 700 }}>{c.code}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -204,32 +318,11 @@ export default function SignupPage() {
               <label className="input-label">Phone Number</label>
               <div style={{ display: 'flex', gap: '8px' }}>
 
-                {/* Country code dropdown */}
-                <select
-                  name="phoneCode"
+                <PhoneCodeDropdown
                   value={form.phoneCode}
-                  onChange={handleChange}
+                  onChange={(code) => setForm(prev => ({ ...prev, phoneCode: code }))}
                   disabled={loading}
-                  style={{
-                    flexShrink: 0, width: '110px',
-                    padding: '12px 8px',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--navy-border)',
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-primary)',
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    colorScheme: 'dark',
-                  }}
-                >
-                  {PHONE_CODES.map((c, i) => (
-                    <option key={i} value={c.code}>
-                      {c.flag} {c.code}
-                    </option>
-                  ))}
-                </select>
+                />
 
                 {/* Number input */}
                 <input
