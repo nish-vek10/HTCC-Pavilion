@@ -64,7 +64,7 @@ export default function AdminMembersPage() {
     const { data, error } = await supabase
       .from('profiles')
       .select(`
-        id, full_name, phone, role, created_at,
+        id, full_name, phone, role, email, created_at,
         team_members ( team_id, teams ( name ) )
       `)
       .order('full_name')
@@ -140,23 +140,21 @@ export default function AdminMembersPage() {
     if (newRole === 'member') {
       try {
         const firstName = memberName?.split(' ')[0] || memberName
+        // Get email from already-loaded members list — avoids second DB call
+        const memberInList = members.find(m => m.id === memberId)
+        const memberEmail  = memberInList?.email
 
-        // Fetch email from profiles
-        const { data: memberProfile, error: profileErr } = await supabase
-          .from('profiles').select('email').eq('id', memberId).single()
+        console.log('[Approval] memberId:', memberId, 'email:', memberEmail, 'firstName:', firstName)
 
-        console.log('[Approval] memberProfile:', memberProfile, 'error:', profileErr)
-
-        if (!memberProfile?.email) {
-          console.warn('[Approval] No email found for member:', memberId)
+        if (!memberEmail) {
+          console.warn('[Approval] No email found in members list for:', memberId)
         } else {
-          console.log('[Approval] Invoking edge function for:', memberProfile.email)
+          console.log('[Approval] Invoking edge function...')
           const { data: fnData, error: fnErr } = await supabase.functions.invoke(
             'send-approval-email',
-            { body: { email: memberProfile.email, firstName } }
+            { body: { email: memberEmail, firstName } }
           )
-          console.log('[Approval] Function result:', fnData, 'error:', fnErr)
-          if (fnErr) console.error('[Approval] Edge function error:', fnErr)
+          console.log('[Approval] Result:', fnData, 'error:', fnErr)
         }
       } catch (err) {
         console.error('[Approval] Unexpected error:', err.message)
