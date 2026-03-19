@@ -96,16 +96,19 @@ export default function PendingPage() {
         }}>
           Questions? Contact your HTCC admin directly.
           <br />
-          href="/"
-            style={{ color: 'var(--gold)', fontWeight: 600, textDecoration: 'none', marginTop: '8px', display: 'inline-block' }}
-            onClick={async (e) => {
-              e.preventDefault()
+          <button
+            onClick={async () => {
               await signOut()
               window.location.href = '/'
             }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--gold)', fontWeight: 600, fontSize: '13px',
+              marginTop: '8px', padding: 0,
+            }}
           >
             ← Back to Homepage
-          </a>
+          </button>
         </div>
       </div>
 
