@@ -3,7 +3,9 @@
 // Shown only on mobile (≤768px) via CSS — hidden on desktop.
 // Member: Home / Fixtures / Teams / Alerts / Profile — matches native app exactly.
 
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { supabase } from '../../lib/supabase.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { ROUTES } from '../../lib/constants.js'
 
@@ -40,6 +42,43 @@ export default function BottomTabBar() {
   const isAdmin   = useAuthStore(state => state.isAdmin)
   const isCaptain = useAuthStore(state => state.isCaptain)
   const profile   = useAuthStore(state => state.profile)
+
+  // ── Unread notification count for Alerts badge ────────────────────────────
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!profile?.id) return
+
+    // Initial fetch
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact' })
+        .eq('user_id', profile.id)
+        .eq('read', false)
+      setUnreadCount(count || 0)
+    }
+    fetchUnread()
+
+    // Real-time sync — mirrors NotificationBell exactly
+    const channel = supabase
+      .channel('bottom-tab-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, () => setUnreadCount(c => c + 1))
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, () => fetchUnread())
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, () => fetchUnread())
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [profile?.id])
 
   // Derive initials + avatar colour from profile — used for Profile tab icon
   const avatarColor    = profile?.avatar_color || '#F5C518'
@@ -172,14 +211,33 @@ export default function BottomTabBar() {
               </div>
             ) : (
               // Emoji icon — all other tabs
-              <span style={{
-                fontSize: '20px', lineHeight: 1,
-                filter: isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
-                transform: isActive ? 'scale(1.15)' : 'scale(1)',
-                transition: 'all 0.2s ease',
-              }}>
-                {tab.icon}
-              </span>
+              // Alerts tab gets an unread badge overlay
+              <div style={{ position: 'relative', display: 'inline-flex' }}>
+                <span style={{
+                  fontSize: '20px', lineHeight: 1,
+                  filter: isActive ? 'none' : 'grayscale(0.2) opacity(0.45)',
+                  transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                  transition: 'all 0.2s ease',
+                }}>
+                  {tab.icon}
+                </span>
+                {/* Badge — only on Alerts tab when there are unread notifications */}
+                {tab.label === 'Alerts' && unreadCount > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '-5px', right: '-7px',
+                    minWidth: '16px', height: '16px',
+                    borderRadius: '8px',
+                    background: '#EF4444',
+                    border: '1.5px solid #0D1B2A',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '9px', fontWeight: 700, color: '#fff',
+                    padding: '0 3px', lineHeight: 1,
+                    boxShadow: '0 0 6px rgba(239,68,68,0.6)',
+                  }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Label */}
