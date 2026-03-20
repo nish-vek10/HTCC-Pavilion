@@ -129,33 +129,42 @@ export default function AdminMembersPage() {
       notifBody  = 'You have been granted Admin access to the Pavilion platform. You can now manage fixtures, members, and training sessions.'
     }
 
+    // ── In-app notification — wrapped so it never blocks email sending ────
     if (notifTitle) {
-      await supabase.from('notifications').insert({
-        user_id: memberId, type: notifType,
-        title: notifTitle, body: notifBody, read: false,
-      })
+      try {
+        await supabase.from('notifications').insert({
+          user_id: memberId, type: notifType,
+          title: notifTitle, body: notifBody, read: false,
+        })
+      } catch (notifErr) {
+        console.warn('[Approval] Notification insert failed:', notifErr.message)
+      }
     }
 
     // ── Send approval email via Edge Function ─────────────────────────────
     if (newRole === 'member') {
       try {
-        const firstName = memberName?.split(' ')[0] || memberName
+        const firstName    = memberName?.split(' ')[0] || memberName
         const memberInList = members.find(m => m.id === memberId)
         const memberEmail  = memberInList?.email
 
-        // Visible toast confirms this code path is reached
-        toast(`[Debug] email: ${memberEmail || 'NOT FOUND'}`, { icon: '🔍', duration: 8000 })
-        console.log('[Approval] memberId:', memberId, 'email:', memberEmail, 'firstName:', firstName)
+        console.log('[Approval] email:', memberEmail, 'firstName:', firstName)
 
         if (!memberEmail) {
-          console.warn('[Approval] No email found in members list for:', memberId)
+          console.warn('[Approval] No email found for:', memberId)
+          toast.error('Approved but email not found — check profiles.email column')
         } else {
-          console.log('[Approval] Invoking edge function...')
           const { data: fnData, error: fnErr } = await supabase.functions.invoke(
             'send-approval-email',
             { body: { email: memberEmail, firstName } }
           )
-          console.log('[Approval] Result:', fnData, 'error:', fnErr)
+          if (fnErr) {
+            console.error('[Approval] Edge function error:', fnErr)
+            toast.error('Approved but email failed: ' + fnErr.message)
+          } else {
+            console.log('[Approval] Email sent successfully:', fnData)
+            toast.success('Approval email sent ✓', { duration: 3000 })
+          }
         }
       } catch (err) {
         console.error('[Approval] Unexpected error:', err.message)
