@@ -935,13 +935,18 @@ export default function DashboardPage() {
             <button
               onClick={() => setWeekOffset(w => w - 1)}
               style={{
-                padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                width: '36px', height: '36px', borderRadius: '50%',
                 border: '1px solid var(--navy-border)',
-                background: 'transparent', color: 'var(--text-muted)',
-                fontSize: '13px', cursor: 'pointer', transition: 'var(--transition)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-muted)',
+                fontSize: '16px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'var(--transition)', flexShrink: 0,
               }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(245,197,24,0.4)'; e.currentTarget.style.color = 'var(--gold)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--navy-border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              ← Prev
+              ‹
             </button>
             <div
               className="week-nav-pill"
@@ -962,23 +967,19 @@ export default function DashboardPage() {
             <button
               onClick={() => setWeekOffset(w => w + 1)}
               style={{
-                padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                width: '36px', height: '36px', borderRadius: '50%',
                 border: '1px solid var(--navy-border)',
-                background: 'transparent', color: 'var(--text-muted)',
-                fontSize: '13px', cursor: 'pointer', transition: 'var(--transition)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-muted)',
+                fontSize: '16px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'var(--transition)', flexShrink: 0,
               }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(245,197,24,0.4)'; e.currentTarget.style.color = 'var(--gold)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--navy-border)'; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              Next →
+              ›
             </button>
-            {(isCaptain() || isAdmin()) && (
-              <button
-                className="btn btn--secondary"
-                style={{ fontSize: '13px', marginLeft: '8px' }}
-                onClick={() => navigate('/captain/fixtures')}
-              >
-                + Add Fixture
-              </button>
-            )}
           </div>
         </div>
 
