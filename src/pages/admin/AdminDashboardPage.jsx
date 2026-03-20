@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
   const fetchPending = async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, created_at')
+      .select('id, full_name, phone, email, created_at')
       .eq('role', 'pending')
       .order('created_at', { ascending: true })
 
@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
     setJoinRequests(prev => prev.filter(r => r.id !== req.id))
   }
 
-  // ── Approve a pending member — updates role + sends welcome notification ──
+  // ── Approve a pending member — updates role + notification + approval email ──
   const handleApprove = async (memberId, name) => {
     const { error } = await supabase
       .from('profiles')
@@ -178,18 +178,50 @@ export default function AdminDashboardPage() {
 
     if (error) { toast.error('Failed to approve member'); return }
 
-    // Send welcome notification to the new member
+    // Send in-app notification
     await supabase.from('notifications').insert({
       user_id: memberId,
-      type:    'welcome',
-      title:   'Welcome to Harrow Town CC! 🏏',
-      body:    `Hi ${name}, your membership has been approved. Welcome to the club!`,
+      type:    'approval',
+      title:   '✅ Application Approved',
+      body:    `Welcome to Harrow Town Cricket Club! Your membership has been approved. You now have full access to Pavilion.`,
       read:    false,
     })
 
     toast.success(`${name} approved as member`)
     setPending(prev => prev.filter(p => p.id !== memberId))
     setStats(prev => ({ ...prev, pending: prev.pending - 1, members: prev.members + 1 }))
+
+    // ── Send approval email via Edge Function ─────────────────────────────
+    try {
+      const firstName   = name?.split(' ')[0] || name
+      const memberInList = pending.find(p => p.id === memberId)
+      let memberEmail   = memberInList?.email
+
+      // Fallback — re-fetch if not in state
+      if (!memberEmail) {
+        const { data: freshProfile } = await supabase
+          .from('profiles').select('email').eq('id', memberId).single()
+        memberEmail = freshProfile?.email
+      }
+
+      if (!memberEmail) {
+        toast(`Approved! No email on file for ${name}`, { icon: '⚠️', duration: 5000 })
+        return
+      }
+
+      const { error: fnErr } = await supabase.functions.invoke(
+        'send-approval-email',
+        { body: { email: memberEmail, firstName } }
+      )
+
+      if (fnErr) {
+        toast.error('Approved but email failed: ' + fnErr.message)
+      } else {
+        toast.success('Approval email sent ✓', { duration: 3000 })
+      }
+    } catch (err) {
+      console.error('[Approval] Email error:', err.message)
+    }
   }
 
   // ── Reject a pending member — deletes their profile row ──
