@@ -45,6 +45,7 @@ export default function NotificationBell() {
 
     const channel = supabase
       .channel('pavilion-notifications-bell')
+      // ── New notification arrives → prepend to list ──
       .on(
         'postgres_changes',
         {
@@ -55,6 +56,34 @@ export default function NotificationBell() {
         },
         (payload) => {
           setNotifications(prev => [payload.new, ...prev])
+        }
+      )
+      // ── Notification marked read (from page or bell) → update in place ──
+      .on(
+        'postgres_changes',
+        {
+          event:  'UPDATE',
+          schema: 'public',
+          table:  'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          setNotifications(prev =>
+            prev.map(n => n.id === payload.new.id ? { ...n, read: payload.new.read } : n)
+          )
+        }
+      )
+      // ── Notification deleted (from page) → remove from bell list ──
+      .on(
+        'postgres_changes',
+        {
+          event:  'DELETE',
+          schema: 'public',
+          table:  'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          setNotifications(prev => prev.filter(n => n.id !== payload.old.id))
         }
       )
       .subscribe()
