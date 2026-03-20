@@ -144,30 +144,42 @@ export default function AdminMembersPage() {
     // ── Send approval email via Edge Function ─────────────────────────────
     if (newRole === 'member') {
       try {
-        const firstName    = memberName?.split(' ')[0] || memberName
+        const firstName = memberName?.split(' ')[0] || memberName
+
+        // Try in-memory list first, fallback to direct DB query
         const memberInList = members.find(m => m.id === memberId)
-        const memberEmail  = memberInList?.email
+        let memberEmail = memberInList?.email
 
-        console.log('[Approval] email:', memberEmail, 'firstName:', firstName)
-
+        // Fallback — re-fetch directly if not in memory
         if (!memberEmail) {
-          console.warn('[Approval] No email found for:', memberId)
-          toast.error('Approved but email not found — check profiles.email column')
+          const { data: freshProfile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', memberId)
+            .single()
+          memberEmail = freshProfile?.email
+        }
+
+        // Last resort — fetch from auth.users via a known workaround
+        // Store email in profiles if still missing
+        if (!memberEmail) {
+          toast(`Approved! Email not on file for ${memberName} — ask them to update profile`, { icon: '⚠️', duration: 6000 })
+          return
+        }
+
+        const { data: fnData, error: fnErr } = await supabase.functions.invoke(
+          'send-approval-email',
+          { body: { email: memberEmail, firstName } }
+        )
+
+        if (fnErr) {
+          toast.error('Approved but email failed: ' + fnErr.message)
         } else {
-          const { data: fnData, error: fnErr } = await supabase.functions.invoke(
-            'send-approval-email',
-            { body: { email: memberEmail, firstName } }
-          )
-          if (fnErr) {
-            console.error('[Approval] Edge function error:', fnErr)
-            toast.error('Approved but email failed: ' + fnErr.message)
-          } else {
-            console.log('[Approval] Email sent successfully:', fnData)
-            toast.success('Approval email sent ✓', { duration: 3000 })
-          }
+          toast.success('Approval email sent ✓', { duration: 3000 })
         }
       } catch (err) {
         console.error('[Approval] Unexpected error:', err.message)
+        toast.error('Email send failed: ' + err.message)
       }
     }
   }
