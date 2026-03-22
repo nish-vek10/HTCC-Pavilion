@@ -72,7 +72,7 @@ export default function TeamsPage() {
       .eq('status', 'active')
 
     if (data) {
-      const teams = data.map(t => t.teams).filter(Boolean)
+      const teams = sortTeams(data.map(t => t.teams).filter(Boolean))
       setMyTeams(teams)
       if (teams.length > 0) {
         await fetchFixturesAndAvailability(teams.map(t => t.id))
