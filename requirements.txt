@@ -1,0 +1,7 @@
+# pavilion-app/requirements.txt
+
+requests
+beautifulsoup4
+supabase
+python-dotenv
+lxml
