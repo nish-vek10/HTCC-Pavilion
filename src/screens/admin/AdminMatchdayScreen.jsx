@@ -13,7 +13,7 @@ import { fetchPromptedPlayers, sendPromptNotification } from '../../lib/promptHe
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { SCREENS } from '../../lib/constants'
+import { SCREENS, toTitleCase, teamColor } from '../../lib/constants'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
@@ -44,8 +44,22 @@ function getNextSunday() {
   return toLocalISO(sun)
 }
 
+function xiRank(name = '') {
+  if (name.includes('1st')) return 0
+  if (name.includes('2nd')) return 1
+  if (name.includes('3rd')) return 2
+  if (name.includes('4th')) return 3
+  return 4
+}
+
 function getInitials(name) {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+}
+
+// Format availability timestamp → "Mon 09 May, 14:32" (null-safe)
+function formatAvailTS(ts) {
+  if (!ts) return null
+  try { return format(parseISO(ts), 'EEE dd MMM, HH:mm') } catch { return null }
 }
 
 export default function AdminMatchdayScreen({ navigation }) {
@@ -80,17 +94,48 @@ export default function AdminMatchdayScreen({ navigation }) {
     else setLoading(true)
     setFixtures([])
     setPlayerData({})
-
+    try {
     const teamNames = activeTab === 'saturday' ? SATURDAY_TEAMS : SUNDAY_TEAMS
     const { data: teamRows } = await supabase.from('teams').select('id, name').in('name', teamNames)
-    if (!teamRows || teamRows.length === 0) { setLoading(false); setRefreshing(false); return }
+    if (!teamRows || teamRows.length === 0) { return }
 
     const teamIds = teamRows.map(t => t.id)
     const { data: fixtureRows } = await supabase.from('fixtures')
       .select('*, teams(id, name)').eq('match_date', matchDate).in('team_id', teamIds)
     setFixtures(fixtureRows || [])
 
-    await Promise.all((fixtureRows || []).map(f => fetchFixtureDetail(f.id, f.team_id)))
+    // ── Fetch ALL squad data upfront so we can build cross-team map ──────────
+    const squadResults = await Promise.all(
+      (fixtureRows || []).map(f =>
+        supabase.from('squads')
+          .select('id, published, fixture_id, squad_members(player_id, position_order)')
+          .eq('fixture_id', f.id)
+          .maybeSingle()
+      )
+    )
+
+    // cross-team map: player_id → { teamName, fixtureId } of first team they're drafted for
+    const crossTeamMap = {}
+    squadResults.forEach(({ data: squadData }, idx) => {
+      if (!squadData?.squad_members?.length) return
+      const teamName  = fixtureRows[idx].teams?.name
+      const fixtureId = fixtureRows[idx].id
+      squadData.squad_members.forEach(sm => {
+        if (!crossTeamMap[sm.player_id]) {
+          crossTeamMap[sm.player_id] = { teamName, fixtureId }
+        }
+      })
+    })
+
+    // squad lookup by fixtureId
+    const squadMap = {}
+    squadResults.forEach(({ data: squadData }, idx) => {
+      if (squadData) squadMap[fixtureRows[idx].id] = squadData
+    })
+
+    await Promise.all(
+      (fixtureRows || []).map(f => fetchFixtureDetail(f.id, f.team_id, squadMap[f.id], crossTeamMap))
+    )
 
     // Load prompted state for all fixtures
     const promptedMaps = await Promise.all(
@@ -99,30 +144,57 @@ export default function AdminMatchdayScreen({ navigation }) {
     const merged = Object.assign({}, ...promptedMaps)
     setPrompted(merged)
 
-    setLoading(false)
-    setRefreshing(false)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
-  const fetchFixtureDetail = async (fixtureId, teamId) => {
-    const [{ data: members }, { data: avail }, { data: squadData }] = await Promise.all([
+  const fetchFixtureDetail = async (fixtureId, teamId, squadData, crossTeamMap = {}) => {
+    const [{ data: members }, { data: avail }] = await Promise.all([
       supabase.from('team_members').select('player_id, profiles(id, full_name, avatar_color)').eq('team_id', teamId).eq('status', 'active'),
-      supabase.from('availability').select('player_id, status').eq('fixture_id', fixtureId),
-      supabase.from('squads').select('id, published, squad_members(player_id, position_order)').eq('fixture_id', fixtureId).single(),
+      supabase.from('availability').select('player_id, status, updated_at').eq('fixture_id', fixtureId),
     ])
 
     const availMap = {}
-    avail?.forEach(a => { availMap[a.player_id] = a.status })
-    const squadIds = new Set(squadData?.squad_members?.map(sm => sm.player_id) || [])
+    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at } })
 
-    const players = (members || []).map(m => ({
-      id:      m.player_id,
-      name:    m.profiles?.full_name || 'Unknown',
-      color:   m.profiles?.avatar_color || colors.gold,
-      status:  availMap[m.player_id] || null,
-      inSquad: squadIds.has(m.player_id),
-    })).sort((a, b) => {
-      const order = { available: 0, tentative: 1, unavailable: 2 }
-      return (order[a.status] ?? 3) - (order[b.status] ?? 3)
+    // position map: player_id → position_order for THIS fixture's squad
+    const positionMap = {}
+    squadData?.squad_members?.forEach(sm => { positionMap[sm.player_id] = sm.position_order })
+
+    const players = (members || []).map(m => {
+      const inSquad     = m.player_id in positionMap
+      const crossEntry  = crossTeamMap[m.player_id]
+      // locked = in another team's draft, NOT this team's squad
+      const lockedByTeam = (!inSquad && crossEntry) ? crossEntry.teamName : null
+      const availEntry   = availMap[m.player_id] || null
+      return {
+        id:             m.player_id,
+        name:           toTitleCase(m.profiles?.full_name) || 'Unknown',
+        color:          m.profiles?.avatar_color || colors.gold,
+        status:         availEntry?.status || null,
+        availUpdatedAt: availEntry?.updatedAt || null,
+        inSquad,
+        position:       positionMap[m.player_id] || 999,
+        lockedByTeam,
+      }
+    }).sort((a, b) => {
+      // Squad members first — sorted by position_order (batting order)
+      if (a.inSquad && b.inSquad) return a.position - b.position
+      if (a.inSquad)  return -1
+      if (b.inSquad)  return  1
+      // Non-squad: available → locked → tentative → unavailable → no reply, A-Z within each
+      const grp = p => {
+        if (p.status === 'available'   && !p.lockedByTeam) return 0
+        if (p.lockedByTeam)                                return 1
+        if (p.status === 'tentative')                      return 2
+        if (p.status === 'unavailable')                    return 3
+        return 4  // no reply
+      }
+      const ga = grp(a), gb = grp(b)
+      if (ga !== gb) return ga - gb
+      return a.name.localeCompare(b.name)
     })
 
     setPlayerData(prev => ({ ...prev, [fixtureId]: { players, squad: squadData } }))
@@ -224,7 +296,7 @@ export default function AdminMatchdayScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          fixtures.map(fixture => {
+          [...fixtures].sort((a, b) => xiRank(a.teams?.name) - xiRank(b.teams?.name)).map(fixture => {
             const data        = playerData[fixture.id]
             const players     = data?.players || []
             const isPublished = data?.squad?.published || false
@@ -232,14 +304,17 @@ export default function AdminMatchdayScreen({ navigation }) {
             const tent   = countStatus(fixture.id, 'tentative')
             const unavail= countStatus(fixture.id, 'unavailable')
             const noReply= players.filter(p => !p.status).length
+            const tCol   = teamColor(fixture.teams?.name)
 
             return (
-              <View key={fixture.id} style={[styles.fixtureCard, isPublished && styles.fixtureCardPublished]}>
+              <View key={fixture.id} style={[styles.fixtureCard, isPublished && styles.fixtureCardPublished, { borderLeftColor: tCol, borderLeftWidth: 3 }]}>
                 {/* Header */}
                 <View style={styles.fixtureHeader}>
                   <View>
                     <View style={styles.tagRow}>
-                      <View style={styles.teamBadge}><Text style={styles.teamBadgeText}>{fixture.teams?.name?.toUpperCase()}</Text></View>
+                      <View style={[styles.teamBadge, { backgroundColor: tCol + '18', borderColor: tCol + '44' }]}>
+                        <Text style={[styles.teamBadgeText, { color: tCol }]}>{fixture.teams?.name?.toUpperCase()}</Text>
+                      </View>
                       {(() => {
                         const hwCfg = fixture.home_away === 'home'
                           ? { icon: 'homeFixture', label: 'HOME', color: colors.green, bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.25)' }
@@ -305,24 +380,33 @@ export default function AdminMatchdayScreen({ navigation }) {
                     <Text style={styles.noPlayers}>No players assigned to this team</Text>
                   ) : players.map((player, i) => (
                     <View key={player.id} style={[styles.playerRow, i < players.length - 1 && styles.playerRowBorder,
-                      player.status === 'unavailable' && { opacity: 0.5 }]}>
+                      (player.status === 'unavailable' || player.lockedByTeam) && { opacity: 0.45 }]}>
                       {player.inSquad ? (
                         <View style={styles.squadNumBadge}>
-                          <Text style={styles.squadNum}>
-                            {(() => {
-                              const sorted = [...(data?.squad?.squad_members || [])]
-                                .sort((a, b) => (a.position_order || 0) - (b.position_order || 0))
-                              const idx = sorted.findIndex(sm => sm.player_id === player.id)
-                              return idx >= 0 ? idx + 1 : '•'
-                            })()}
-                          </Text>
+                          <Text style={styles.squadNum}>{player.position}</Text>
+                        </View>
+                      ) : player.lockedByTeam ? (
+                        <View style={styles.lockedBadge}>
+                          <Text style={styles.lockedIcon}>⊘</Text>
                         </View>
                       ) : (
                         <View style={[styles.playerAvatar, { backgroundColor: player.color + '22', borderColor: player.color + '44' }]}>
                           <Text style={[styles.playerAvatarText, { color: player.color }]}>{getInitials(player.name)}</Text>
                         </View>
                       )}
-                      <Text style={[styles.playerName, player.inSquad && styles.playerNameSquad]}>{player.name}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.playerName, player.inSquad && styles.playerNameSquad]} numberOfLines={1}>
+                          {player.name}
+                        </Text>
+                        {player.lockedByTeam && (
+                          <Text style={styles.lockedTeamLabel}>{player.lockedByTeam}</Text>
+                        )}
+                        {formatAvailTS(player.availUpdatedAt) && (
+                          <Text style={styles.availTimestamp}>
+                            Last Updated: {formatAvailTS(player.availUpdatedAt)}
+                          </Text>
+                        )}
+                      </View>
                       {player.inSquad && <Text style={styles.squadStar}>★</Text>}
                       {/* Prompt button — only for no-reply players */}
                       {!player.status && (() => {
@@ -476,7 +560,11 @@ const styles = StyleSheet.create({
   squadNum:          { fontFamily: fonts.bold, fontSize: 10, color: colors.navy },
   playerAvatar:      { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   playerAvatarText:  { fontFamily: fonts.bold, fontSize: 9 },
-  playerName:        { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.textLight },
+  playerName:        { fontFamily: fonts.body, fontSize: 13, color: colors.textLight },
+  lockedBadge:       { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.08)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  lockedIcon:        { fontSize: 13, color: colors.red },
+  lockedTeamLabel:   { fontFamily: fonts.bold, fontSize: 9, color: colors.red, letterSpacing: 0.5, marginTop: 1 },
+  availTimestamp:    { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
   playerNameSquad:   { fontFamily: fonts.bold, color: colors.white },
   squadStar:         { fontFamily: fonts.bold, fontSize: 11, color: colors.gold, marginRight: 4 },
   statusDot:         { width: 8, height: 8, borderRadius: 4, flexShrink: 0, elevation: 2 },

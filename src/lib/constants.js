@@ -69,6 +69,12 @@ export const TEAM_COLOURS = {
   'Sunday XI':'#F97316',   // orange
 }
 
+// Normalise any casing variation → Title Case  (e.g. "MOHIT singh TanWar" → "Mohit Singh Tanwar")
+export function toTitleCase(name) {
+  if (!name) return name
+  return name.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+}
+
 // Helper — returns the canonical colour for a team name string
 export function teamColor(name) {
   if (!name) return '#8B9BB4'
@@ -99,17 +105,20 @@ export const NOTIF_TYPE_ICON = {
   welcome:               'approve',
   join_approved:         'approve',
   join_rejected:         'reject',
+  potm:                  'trophy',
   custom:                'send',
 }
 
 // ─── Screen name constants — used by all navigators ───────────────────────────
 export const SCREENS = {
   // Auth
-  WELCOME:     'Welcome',
-  LOGIN:       'Login',
-  SIGNUP:      'Signup',
-  PENDING:     'Pending',
-  CHECK_EMAIL: 'CheckEmail',
+  WELCOME:          'Welcome',
+  LOGIN:            'Login',
+  SIGNUP:           'Signup',
+  PENDING:          'Pending',
+  CHECK_EMAIL:      'CheckEmail',
+  FORGOT_PASSWORD:  'ForgotPassword',
+  RESET_PASSWORD:   'ResetPassword',
 
   // Member
   DASHBOARD:     'Dashboard',

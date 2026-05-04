@@ -130,6 +130,14 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
+            {/* Forgot password */}
+            <TouchableOpacity
+              style={styles.forgotWrap}
+              onPress={() => navigation.navigate(SCREENS.FORGOT_PASSWORD)}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
             {/* Divider */}
             <View style={styles.divider} />
 
@@ -218,6 +226,9 @@ const styles = StyleSheet.create({
   },
   switchText: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, textAlign: 'center' },
   switchLink: { color: colors.gold, fontWeight: '600' },
+
+  forgotWrap: { alignItems: 'center', marginTop: spacing.md },
+  forgotText: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 
   backLink:     { marginTop: spacing.lg },
   backLinkText: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },

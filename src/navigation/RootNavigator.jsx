@@ -3,25 +3,36 @@
 
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import useAuthStore    from '../store/authStore'
-import { ROLES }       from '../lib/constants'
-import AppLoader       from '../components/AppLoader'
+import useAuthStore          from '../store/authStore'
+import { ROLES }             from '../lib/constants'
+import AppLoader             from '../components/AppLoader'
 
-import AuthNavigator    from './AuthNavigator'
-import MemberNavigator  from './MemberNavigator'
-import AdminNavigator   from './AdminNavigator'
-import CaptainNavigator from './CaptainNavigator'
+import AuthNavigator          from './AuthNavigator'
+import MemberNavigator        from './MemberNavigator'
+import AdminNavigator         from './AdminNavigator'
+import CaptainNavigator       from './CaptainNavigator'
+import ResetPasswordScreen    from '../screens/public/ResetPasswordScreen'
 
 const Stack = createNativeStackNavigator()
 const NO_HEADER = { headerShown: false }
 
 export default function RootNavigator() {
-  const session = useAuthStore(s => s.session)
-  const profile = useAuthStore(s => s.profile)
-  const loading = useAuthStore(s => s.loading)
+  const session            = useAuthStore(s => s.session)
+  const profile            = useAuthStore(s => s.profile)
+  const loading            = useAuthStore(s => s.loading)
+  const isPasswordRecovery = useAuthStore(s => s.isPasswordRecovery)
 
   // Auth state still resolving — show branded loader, never null/black
   if (loading) return <AppLoader />
+
+  // PASSWORD_RECOVERY deep link — show reset screen regardless of auth state
+  if (isPasswordRecovery) {
+    return (
+      <Stack.Navigator key="password-recovery" screenOptions={NO_HEADER}>
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      </Stack.Navigator>
+    )
+  }
 
   // No session — unauthenticated flow
   if (!session) {

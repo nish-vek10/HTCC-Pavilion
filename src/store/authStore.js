@@ -7,14 +7,16 @@ import { ROLES } from '../lib/constants'
 
 const useAuthStore = create((set, get) => ({
   // ─── State ──────────────────────────────────────────────────────────────────
-  session: null,
-  profile: null,
-  loading: true,
+  session:            null,
+  profile:            null,
+  loading:            true,
+  isPasswordRecovery: false,
 
   // ─── Setters ────────────────────────────────────────────────────────────────
-  setSession: (session) => set({ session }),
-  setProfile: (profile) => set({ profile }),
-  setLoading: (loading) => set({ loading }),
+  setSession:            (session)  => set({ session }),
+  setProfile:            (profile)  => set({ profile }),
+  setLoading:            (loading)  => set({ loading }),
+  setPasswordRecovery:   (val)      => set({ isPasswordRecovery: val }),
 
   // ─── Fetch profile row from Supabase after login ──────────────────────────
   fetchProfile: async (userId) => {

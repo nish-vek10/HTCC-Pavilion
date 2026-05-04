@@ -11,5 +11,14 @@
       }
     },
     "production": {}
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "anish.vek10@gmail.com",
+        "ascAppId": "6761196439",
+        "appleTeamId": "7T4DG8HHMT"
+      }
+    }
   }
 }

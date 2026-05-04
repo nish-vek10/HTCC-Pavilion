@@ -15,7 +15,8 @@ import TopHeader         from '../../components/layout/TopHeader'
 import AppIcon           from '../../components/AppIcon'
 import icons             from '../../lib/icons'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { teamColor, shortTeam } from '../../lib/constants'
+import { teamColor, shortTeam, toTitleCase } from '../../lib/constants'
+import { calcPlayerPoints } from '../../lib/fantasyPoints'
 
 // ─── CONFIGURABLE ─────────────────────────────────────────────────────────────
 const MAX_LIST_ROWS = 25   // rows shown before "Show all" button
@@ -83,7 +84,7 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
     if (!map[pid]) {
       map[pid] = {
         player_id: pid,
-        player_name: row.profiles?.full_name || 'Unknown',
+        player_name: toTitleCase(row.profiles?.full_name) || 'Unknown',
         teams: new Set(),
         // batting totals
         bat_innings: 0, bat_runs: 0, bat_balls: 0,
@@ -92,33 +93,52 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
         bat_fifties: 0, bat_hundreds: 0,
       }
     }
-    const p   = map[pid]
+    const p     = map[pid]
     const tName = row.fixtures?.teams?.name
     if (tName) p.teams.add(tName)
 
     const runs  = row.runs  || 0
     const balls = row.balls || 0
-    p.bat_innings++
+
+    // Innings only counts if the player actually batted:
+    // faced ≥1 ball, OR was run out without facing a ball
+    const didBat = balls > 0 || !!row.run_out
+    if (didBat) {
+      p.bat_innings++
+      if (row.not_out) p.bat_not_outs++
+    }
+
     p.bat_runs  += runs
     p.bat_balls += balls
     p.bat_fours += row.fours || 0
     p.bat_sixes += row.sixes || 0
-    if (row.not_out) p.bat_not_outs++
-    if (runs > p.bat_highest || (runs === p.bat_highest && row.not_out)) {
+
+    if (runs > p.bat_highest || (runs === p.bat_highest && row.not_out && didBat)) {
       p.bat_highest    = runs
-      p.bat_highest_no = row.not_out
+      p.bat_highest_no = !!row.not_out
     }
     if (runs >= 100) p.bat_hundreds++
     else if (runs >= 50) p.bat_fifties++
   })
 
   // ── Bowling ─────────────────────────────────────────────────────────────────
+  // IMPORTANT: overs stored as cricket notation "X.Y" where Y is extra balls (0-5),
+  // NOT a decimal. 3.4 = 3 overs + 4 balls = 22 balls total.
+  // We must convert to integer balls before summing — direct float addition breaks:
+  //   3.4 + 0.4 = 3.8 (JS), but cricket: 4+4=8 balls = 1 extra over → should be 4.2
+  function oversToBalls(oversVal) {
+    const v         = parseFloat(oversVal || 0)
+    const fullOvers = Math.floor(v)
+    const extraBalls = Math.round((v - fullOvers) * 10)
+    return fullOvers * 6 + extraBalls
+  }
+
   bowlData.filter(passesFilter).forEach(row => {
     const pid = row.player_id
     if (!map[pid]) {
       map[pid] = {
         player_id: pid,
-        player_name: row.profiles?.full_name || 'Unknown',
+        player_name: toTitleCase(row.profiles?.full_name) || 'Unknown',
         teams: new Set(),
         bat_innings: 0, bat_runs: 0, bat_balls: 0,
         bat_fours: 0, bat_sixes: 0, bat_not_outs: 0,
@@ -130,18 +150,24 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
     const tName = row.fixtures?.teams?.name
     if (tName) p.teams.add(tName)
 
-    if (p.bowl_overs === undefined) {
+    if (p.bowl_balls === undefined) {
       p.bowl_innings      = 0
-      p.bowl_overs        = 0; p.bowl_maidens = 0
-      p.bowl_runs         = 0; p.bowl_wickets = 0
-      p.bowl_best_wickets = 0; p.bowl_best_runs = 999
-      p.bowl_five_fors    = 0; p.bowl_four_fors = 0
+      p.bowl_balls        = 0  // total balls bowled — correct accumulator for cricket overs
+      p.bowl_maidens      = 0
+      p.bowl_runs         = 0
+      p.bowl_wickets      = 0
+      p.bowl_best_wickets = 0
+      p.bowl_best_runs    = 999
+      p.bowl_five_fors    = 0
+      p.bowl_four_fors    = 0
     }
-    p.bowl_innings  += 1
-    p.bowl_overs    += parseFloat(row.overs   || 0)
-    p.bowl_maidens  += row.maidens  || 0
-    p.bowl_runs     += row.runs     || 0
-    p.bowl_wickets  += row.wickets  || 0
+
+    const balls = oversToBalls(row.overs)
+    if (balls > 0) p.bowl_innings++  // innings only if actually bowled
+    p.bowl_balls   += balls
+    p.bowl_maidens += row.maidens || 0
+    p.bowl_runs    += row.runs    || 0
+    p.bowl_wickets += row.wickets || 0
 
     // Track best bowling figures and hauls
     const wkts = row.wickets || 0
@@ -172,13 +198,53 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
     const pid = row.player_id
     if (!map[pid]) return  // skip POTM for players with no batting row (edge case)
     const p = map[pid]
-    p.potm_count  = (p.potm_count  || 0) + 1
-    p.potm_points = (p.potm_points || 0) + parseFloat(row.points || 0)
+    const mdPts = parseFloat(row.points || 0)
+    p.potm_count    = (p.potm_count  || 0) + 1
+    p.potm_points   = (p.potm_points || 0) + mdPts
+    p.potm_best_md  = Math.max(p.potm_best_md || 0, mdPts)
+  })
+
+  // ── Total points — sum calcPlayerPoints across ALL matches (not just POTM) ──
+  // Build fixture-keyed lookups for bowl + field so we can cross-join with batting.
+  const bowlByKey  = {}
+  const fieldByKey = {}
+  bowlData.filter(passesFilter).forEach(r => {
+    bowlByKey[`${r.fixture_id}:${r.player_id}`] = r
+  })
+  fieldData.filter(passesFilter).forEach(r => {
+    fieldByKey[`${r.fixture_id}:${r.player_id}`] = r
+  })
+  // Accumulate per player across every batting row (covers all played matches)
+  batData.filter(passesFilter).forEach(row => {
+    const pid = row.player_id
+    if (!map[pid]) return
+    const key   = `${row.fixture_id}:${pid}`
+    const bowl  = bowlByKey[key]  || null
+    const field = fieldByKey[key] || null
+    const pts   = calcPlayerPoints(row, bowl, field).total
+    map[pid].total_points = (map[pid].total_points || 0) + pts
+  })
+  // Also credit bowling-only contributions (players who bowled but weren't in batting)
+  bowlData.filter(passesFilter).forEach(row => {
+    const pid = row.player_id
+    if (!map[pid]) return
+    const key   = `${row.fixture_id}:${pid}`
+    if (batData.find(b => b.fixture_id === row.fixture_id && b.player_id === pid)) return // already counted
+    const field = fieldByKey[key] || null
+    const pts   = calcPlayerPoints(null, row, field).total
+    map[pid].total_points = (map[pid].total_points || 0) + pts
   })
 
   // ── Derive calculated fields ─────────────────────────────────────────────────
   return Object.values(map).map(p => {
-    p.teams          = Array.from(p.teams)
+    const xiRank = (name = '') => {
+      if (name.includes('1st')) return 0
+      if (name.includes('2nd')) return 1
+      if (name.includes('3rd')) return 2
+      if (name.includes('4th')) return 3
+      return 4
+    }
+    p.teams          = Array.from(p.teams).sort((a, b) => xiRank(a) - xiRank(b))
     p.htcc_team_name = p.teams[0] || ''
 
     // Batting derived
@@ -186,12 +252,17 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
     p.bat_average     = dismissals > 0   ? p.bat_runs / dismissals   : null
     p.bat_strike_rate = p.bat_balls > 0  ? (p.bat_runs / p.bat_balls) * 100 : null
 
-    // Bowling derived
-    if (p.bowl_overs !== undefined) {
-      const totalBalls     = p.bowl_overs > 0 ? Math.floor(p.bowl_overs) * 6 + Math.round((p.bowl_overs % 1) * 10) : 0
-      p.bowl_average      = p.bowl_wickets > 0 ? p.bowl_runs / p.bowl_wickets : null
-      p.bowl_economy      = p.bowl_overs   > 0 ? p.bowl_runs / p.bowl_overs   : null
-      p.bowl_strike_rate  = p.bowl_wickets > 0 ? totalBalls  / p.bowl_wickets : null
+    // Bowling derived — all based on bowl_balls (integer) accumulated above
+    if (p.bowl_balls !== undefined) {
+      const tb = p.bowl_balls  // total balls (integer — correct cricket accumulator)
+      // Display overs as "X.Y" cricket notation (e.g. 82 balls → 13.4)
+      p.bowl_overs       = tb > 0 ? Math.floor(tb / 6) + (tb % 6) / 10 : 0
+      // Average: runs conceded per wicket
+      p.bowl_average     = p.bowl_wickets > 0 ? p.bowl_runs / p.bowl_wickets : null
+      // Economy: runs per over — divide by actual overs (tb/6), not display notation
+      p.bowl_economy     = tb > 0 ? p.bowl_runs / (tb / 6) : null
+      // Strike rate: balls per wicket
+      p.bowl_strike_rate = p.bowl_wickets > 0 ? tb / p.bowl_wickets : null
       p.bowl_best_figures = p.bowl_best_wickets > 0
         ? `${p.bowl_best_wickets}/${p.bowl_best_runs}` : '—'
     }
@@ -297,7 +368,7 @@ const PlayerModal = React.memo(function PlayerModal({ player, visible, onClose }
                 <View style={modal.statsGrid}>
                   {/* Both POTM and Total Pts get the gold highlight */}
                   <StatBox label="POTM"       value={fmt(player.potm_count, 0)}  highlight />
-                  <StatBox label="Total Pts"  value={fmt(player.potm_points, 0)} highlight />
+                  <StatBox label="Total Pts"  value={fmt(player.total_points, 0)} highlight />
                 </View>
               </>
             )}
@@ -409,9 +480,12 @@ export default function StatsScreen() {
           ((a.field_catches || 0) + (a.field_stumpings || 0))
         )
     }
-    // Awards
+    // Awards — primary: POTM count desc, secondary: total_points desc (tiebreak)
     return agg.filter(p => p.potm_count > 0)
-              .sort((a, b) => (b.potm_count || 0) - (a.potm_count || 0))
+              .sort((a, b) =>
+                (b.potm_count || 0) - (a.potm_count || 0) ||
+                (b.total_points || 0) - (a.total_points || 0)
+              )
   }, [batRaw, bowlRaw, fieldRaw, potmRaw, teamFilter, compFilter, category])
 
   // Reset show more when filters change
@@ -443,33 +517,25 @@ export default function StatsScreen() {
       const topAvg  = [...stats].filter(p => p.bat_innings > 2)
                         .sort((a,b) => (b.bat_average||0) - (a.bat_average||0))[0]
       const topHS   = [...stats].sort((a,b) => (b.bat_highest||0) - (a.bat_highest||0))[0]
-      const topSR   = [...stats].filter(p => (p.bat_balls||0) > 30)
-                        .sort((a,b) => (b.bat_strike_rate||0) - (a.bat_strike_rate||0))[0]
       return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.summaryScroll} contentContainerStyle={styles.summaryContent}>
+        <View style={[styles.summaryScroll, styles.summaryContent]}>
           <SummaryCard label="Most Runs" name={topRuns?.player_name} value={fmt(topRuns?.bat_runs, 0)}    unit="runs" color={colors.gold}    />
           <SummaryCard label="Best Avg"  name={topAvg?.player_name}  value={fmt(topAvg?.bat_average)}     unit="avg"  color={colors.green}   />
           <SummaryCard label="Highest"   name={topHS?.player_name}   value={topHS?.bat_highest > 0 ? `${topHS.bat_highest}${topHS.bat_highest_no ? '*':''}` : '—'} unit="hs" color="#60A5FA" />
-          <SummaryCard label="Best SR"   name={topSR?.player_name}   value={fmt(topSR?.bat_strike_rate)}  unit="sr"   color="#F97316"         />
-        </ScrollView>
+        </View>
       )
     }
     if (category === 'bowling') {
       const topWkts = stats[0]
-      const topAvg  = [...stats].filter(p => p.bowl_wickets > 2)
-                        .sort((a,b) => (a.bowl_average||999) - (b.bowl_average||999))[0]
-      const topEco  = [...stats].filter(p => (p.bowl_overs||0) > 10)
+      const topEco  = [...stats].filter(p => (p.bowl_overs||0) >= 4)
                         .sort((a,b) => (a.bowl_economy||99) - (b.bowl_economy||99))[0]
       const topBB   = [...stats].sort((a,b) => (b.bowl_best_wickets||0) - (a.bowl_best_wickets||0))[0]
       return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.summaryScroll} contentContainerStyle={styles.summaryContent}>
+        <View style={[styles.summaryScroll, styles.summaryContent]}>
           <SummaryCard label="Most Wkts" name={topWkts?.player_name} value={fmt(topWkts?.bowl_wickets, 0)}  unit="wkts" color={colors.gold}   />
-          <SummaryCard label="Best Avg"  name={topAvg?.player_name}  value={fmt(topAvg?.bowl_average)}      unit="avg"  color={colors.green}  />
-          <SummaryCard label="Best Eco"  name={topEco?.player_name}  value={fmt(topEco?.bowl_economy)}      unit="eco"  color="#60A5FA"        />
-          <SummaryCard label="Best Fig"  name={topBB?.player_name}   value={topBB?.bowl_best_figures || '—'} unit="bb"  color="#F97316"        />
-        </ScrollView>
+          <SummaryCard label="Best Eco"  name={topEco?.player_name}  value={fmt(topEco?.bowl_economy)}      unit="eco"  color={colors.green}  />
+          <SummaryCard label="Best Fig"  name={topBB?.player_name}   value={topBB?.bowl_best_figures || '—'} unit="bb"  color="#60A5FA"       />
+        </View>
       )
     }
     if (category === 'fielding') {
@@ -477,23 +543,23 @@ export default function StatsScreen() {
       const topCatch = [...stats].sort((a,b) => (b.field_catches||0) - (a.field_catches||0))[0]
       const topSt    = [...stats].sort((a,b) => (b.field_stumpings||0) - (a.field_stumpings||0))[0]
       return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.summaryScroll} contentContainerStyle={styles.summaryContent}>
+        <View style={[styles.summaryScroll, styles.summaryContent]}>
           <SummaryCard label="Most Ovr." name={topTotal?.player_name} value={fmt((topTotal?.field_catches||0)+(topTotal?.field_stumpings||0), 0)} unit="total" color={colors.gold} />
           <SummaryCard label="Most Cts"  name={topCatch?.player_name} value={fmt(topCatch?.field_catches||0, 0)}    unit="catches"   color={colors.green} />
           <SummaryCard label="Stumpings" name={topSt?.player_name}    value={fmt(topSt?.field_stumpings||0, 0)}    unit="stumpings" color="#60A5FA"       />
-        </ScrollView>
+        </View>
       )
     }
     if (category === 'awards') {
-      const top = stats[0]
+      const topPotm   = stats[0]
+      const topOvr    = [...stats].sort((a,b) => (b.total_points||0)  - (a.total_points||0))[0]
+      const topBestMd = [...stats].sort((a,b) => (b.potm_best_md||0) - (a.potm_best_md||0))[0]
       return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.summaryScroll} contentContainerStyle={styles.summaryContent}>
-          <SummaryCard label="Most POTM"  name={top?.player_name}  value={fmt(top?.potm_count, 0)}  unit="awards" color={colors.gold} />
-          <SummaryCard label="Most Pts"   name={[...stats].sort((a,b) => (b.potm_points||0) - (a.potm_points||0))[0]?.player_name}
-            value={fmt([...stats].sort((a,b) => (b.potm_points||0) - (a.potm_points||0))[0]?.potm_points, 0)} unit="pts" color="#F97316" />
-        </ScrollView>
+        <View style={[styles.summaryScroll, styles.summaryContent]}>
+          <SummaryCard label="Most POTM"    name={topPotm?.player_name}   value={fmt(topPotm?.potm_count, 0)}    unit="awards" color={colors.gold}   />
+          <SummaryCard label="Most Ovr Pts" name={topOvr?.player_name}    value={fmt(topOvr?.total_points, 0)}   unit="pts"    color={colors.green}  />
+          <SummaryCard label="Best M-D Pts" name={topBestMd?.player_name} value={fmt(topBestMd?.potm_best_md, 0)} unit="pts"   color="#60A5FA"        />
+        </View>
       )
     }
     return null
@@ -566,7 +632,7 @@ export default function StatsScreen() {
       {category === 'awards' && (
         <View style={styles.rowStats}>
           <MiniStat label="POTM" value={fmt(item.potm_count, 0)}  primary />
-          <MiniStat label="Pts"  value={fmt(item.potm_points, 0)}         />
+          <MiniStat label="Pts"  value={fmt(item.total_points, 0)}         />
         </View>
       )}
 
@@ -753,7 +819,7 @@ const styles = StyleSheet.create({
 
   // ── Summary ──
   summaryScroll:  { marginBottom: spacing.sm },
-  summaryContent: { gap: 10, paddingRight: spacing.md, paddingVertical: 4 },
+  summaryContent: { flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 10, paddingVertical: 4 },
 
   // ── Rows ──
   countRow:     { marginBottom: 6 },
@@ -788,12 +854,12 @@ const styles = StyleSheet.create({
 })
 
 const summary = StyleSheet.create({
-  card:    { width: 110, backgroundColor: colors.navyLight, borderTopWidth: 3, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, gap: 2 },
-  value:   { fontFamily: fonts.display, fontSize: 26, letterSpacing: 1 },
-  unit:    { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
-  label:   { fontFamily: fonts.bold, fontSize: 9, color: colors.textMuted, letterSpacing: 1.5, textTransform: 'uppercase' },
-  name:    { fontFamily: fonts.bold, fontSize: 11, color: colors.white },
+  card:    { flex: 1, backgroundColor: colors.navyLight, borderTopWidth: 3, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 12, gap: 2 },
+  value:   { fontFamily: fonts.display, fontSize: 28, letterSpacing: 0.5 },
+  unit:    { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 7 },
+  label:   { fontFamily: fonts.bold, fontSize: 9, color: colors.textMuted, letterSpacing: 0.8, textTransform: 'uppercase' },
+  name:    { fontFamily: fonts.bold, fontSize: 12, color: colors.white },
 })
 
 const modal = StyleSheet.create({

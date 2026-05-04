@@ -8,7 +8,13 @@ import {
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { format, parseISO } from 'date-fns'
+
+function formatAvailTS(ts) {
+  if (!ts) return null
+  try { return format(parseISO(ts), 'EEE dd MMM, HH:mm') } catch { return null }
+}
 import { supabase }        from '../../lib/supabase'
+import { toTitleCase }     from '../../lib/constants'
 import useAuthStore        from '../../store/authStore'
 import TopHeader           from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
@@ -26,6 +32,7 @@ export default function TrainingDetailScreen({ navigation, route }) {
   const [session,    setSession]    = useState(null)
   const [players,    setPlayers]    = useState([])
   const [avail,      setAvail]      = useState({})
+  const [availTs,    setAvailTs]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [prompting,  setPrompting]  = useState(false)
@@ -35,9 +42,12 @@ export default function TrainingDetailScreen({ navigation, route }) {
   const loadAll = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    await Promise.all([fetchSession(), fetchPlayers()])
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      await Promise.all([fetchSession(), fetchPlayers()])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   const fetchSession = async () => {
@@ -61,16 +71,21 @@ export default function TrainingDetailScreen({ navigation, route }) {
     // Fetch all availability responses for this session
     const { data: availability, error: availErr } = await supabase
       .from('training_availability')
-      .select('player_id, status')
+      .select('player_id, status, updated_at')
       .eq('session_id', sessionId)
 
     if (availErr) console.error('[TrainingDetail] availability fetch error:', availErr.message)
 
     const availMap = {}
-    availability?.forEach(a => { availMap[a.player_id] = a.status })
+    const availTsMap = {}
+    availability?.forEach(a => {
+      availMap[a.player_id]   = a.status
+      availTsMap[a.player_id] = a.updated_at
+    })
 
     setPlayers(members || [])
     setAvail(availMap)
+    setAvailTs(availTsMap)
   }
 
   // ── Prompt all non-responders ─────────────────────────────────────────
@@ -104,16 +119,17 @@ export default function TrainingDetailScreen({ navigation, route }) {
                   try {
                     // In-app notification (Alerts tab)
                     const { error } = await supabase.from('notifications').insert({
-                      user_id: p.id,
-                      type:    'training_reminder',
-                      title:   notifTitle,
-                      body:    notifBody,
-                      read:    false,
+                      user_id:    p.id,
+                      type:       'training_reminder',
+                      title:      notifTitle,
+                      body:       notifBody,
+                      read:       false,
+                      session_id: sessionId,
                     })
                     if (error) console.warn('[Prompt] In-app notif failed for', p.id, error.message)
 
                     // Device push notification
-                    sendPushToUser(p.id, notifTitle, notifBody, { type: 'training_reminder' })
+                    sendPushToUser(p.id, notifTitle, notifBody, { type: 'training_reminder', session_id: sessionId })
                   } catch (err) {
                     console.warn('[Prompt] Exception for player', p.id, err.message)
                   }
@@ -192,10 +208,10 @@ export default function TrainingDetailScreen({ navigation, route }) {
         {/* ── 2x2 stats ── */}
         <View style={styles.statsGrid}>
           {[
-            { label: 'Total Players',  value: totalPlayers,          color: colors.textMuted },
+            { label: 'Total Players',  value: totalPlayers,          color: colors.gold },
             { label: 'Available',      value: availableList.length,  color: colors.green },
             { label: 'Unavailable',    value: unavailList.length,    color: colors.red },
-            { label: 'Not Responded',  value: notSetList.length,     color: '#F97316' },
+            { label: 'Not Responded',  value: notSetList.length,     color: colors.textMuted },
           ].map(s => (
             <View key={s.label} style={styles.statCard}>
               <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
@@ -253,7 +269,12 @@ export default function TrainingDetailScreen({ navigation, route }) {
                 <View style={[styles.avatar, { backgroundColor: (player.avatar_color || colors.gold) + '22', borderColor: (player.avatar_color || colors.gold) + '44' }]}>
                   <Text style={[styles.avatarText, { color: player.avatar_color || colors.gold }]}>{getInitials(player.full_name)}</Text>
                 </View>
-                <Text style={styles.playerName}>{player.full_name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.playerName}>{toTitleCase(player.full_name)}</Text>
+                  {formatAvailTS(availTs[player.id]) && (
+                    <Text style={styles.availTimestamp}>Last Updated: {formatAvailTS(availTs[player.id])}</Text>
+                  )}
+                </View>
                 <View style={[styles.statusDot, { backgroundColor: section.dot }]} />
               </View>
             ))}
@@ -297,6 +318,7 @@ const styles = StyleSheet.create({
   playerRowBorder:    { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   avatar:             { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarText:         { fontFamily: fonts.bold, fontSize: 10 },
-  playerName:         { flex: 1, fontFamily: fonts.medium, fontSize: 13, color: colors.textLight },
+  playerName:         { fontFamily: fonts.medium, fontSize: 13, color: colors.textLight },
+  availTimestamp:     { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
   statusDot:          { width: 8, height: 8, borderRadius: 4 },
 })

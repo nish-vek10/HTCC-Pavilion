@@ -9,6 +9,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '../../lib/supabase'
+import { toTitleCase } from '../../lib/constants'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
@@ -68,9 +69,12 @@ export default function AdminMembersScreen({ navigation }) {
   const loadAll = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    await Promise.all([fetchMembers(), fetchTeams()])
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      await Promise.all([fetchMembers(), fetchTeams()])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   const fetchMembers = async () => {
@@ -193,7 +197,7 @@ export default function AdminMembersScreen({ navigation }) {
           </View>
           <View style={styles.memberInfo}>
             <View style={styles.memberNameRow}>
-              <Text style={styles.memberName}>{member.full_name}</Text>
+              <Text style={styles.memberName}>{toTitleCase(member.full_name)}</Text>
               {isCurrentUser && <View style={styles.youBadge}><Text style={styles.youText}>You</Text></View>}
               <View style={[styles.roleBadge, { backgroundColor: roleColor + '18', borderColor: roleColor + '44' }]}>
                 <Text style={[styles.roleText, { color: roleColor }]}>{member.role.toUpperCase()}</Text>
@@ -316,7 +320,7 @@ export default function AdminMembersScreen({ navigation }) {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Change Role</Text>
-            <Text style={styles.modalSub}>{roleModal.member?.full_name}</Text>
+            <Text style={styles.modalSub}>{toTitleCase(roleModal.member?.full_name)}</Text>
             {getRoleOptions().map(role => (
               <TouchableOpacity key={role}
                 style={[styles.roleOption, roleModal.member?.role === role && styles.roleOptionActive]}

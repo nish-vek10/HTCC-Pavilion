@@ -5,7 +5,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, Pressable,
-  StyleSheet, Alert, ActivityIndicator,
+  TextInput, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { format, parseISO } from 'date-fns'
@@ -14,8 +14,8 @@ import { fetchPromptedPlayers, sendPromptNotification } from '../../lib/promptHe
 import useAuthStore                       from '../../store/authStore'
 import TopHeader                          from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { AVAILABILITY_CONFIG }            from '../../lib/constants'
-import { sendPushToUsers, insertNotifications } from '../../lib/pushNotifications'
+import { AVAILABILITY_CONFIG, SCREENS, toTitleCase } from '../../lib/constants'
+import { sendPushToUsers, insertNotifications, sendPushToRole, insertNotificationsForRole } from '../../lib/pushNotifications'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
@@ -23,6 +23,12 @@ const ITEM_HEIGHT = 54   // height of each squad row in px
 
 function getInitials(name) {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
+}
+
+// Format availability timestamp → "Mon 09 May, 14:32" (null-safe)
+function formatAvailTS(ts) {
+  if (!ts) return null
+  try { return format(parseISO(ts), 'EEE dd MMM, HH:mm') } catch { return null }
 }
 
 // ─── Draggable Squad List ─────────────────────────────────────────────────────
@@ -140,6 +146,8 @@ export default function SquadSelectionScreen({ navigation, route }) {
   const [loading,   setLoading]   = useState(true)
   const [saving,    setSaving]    = useState(false)
 
+  const [searchQuery,  setSearchQuery]  = useState('')
+
   // ── Role modal state ──────────────────────────────────────────────────────
   const [roleModal,   setRoleModal]   = useState({ open: false, player: null })
   const [prompted,    setPrompted]    = useState({})
@@ -162,8 +170,11 @@ export default function SquadSelectionScreen({ navigation, route }) {
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([fetchFixture(), fetchSquad()])
-    setLoading(false)
+    try {
+      await Promise.all([fetchFixture(), fetchSquad()])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchFixture = async () => {
@@ -182,28 +193,52 @@ export default function SquadSelectionScreen({ navigation, route }) {
     if (!members) return
 
     const { data: avail } = await supabase
-      .from('availability').select('player_id, status').eq('fixture_id', fixtureId)
+      .from('availability').select('player_id, status, updated_at').eq('fixture_id', fixtureId)
     const availMap = {}
-    avail?.forEach(a => { availMap[a.player_id] = a.status })
+    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at } })
 
     const { data: sameDay } = await supabase
-      .from('fixtures').select('id').eq('match_date', matchDate).neq('id', fixtureId)
+      .from('fixtures').select('id, teams(name)').eq('match_date', matchDate).neq('id', fixtureId)
     let conflictIds = []
+    const conflictTeamMap = {}  // { [player_id]: teamName }
     if (sameDay?.length > 0) {
       const { data: squadRows } = await supabase
-        .from('squads').select('squad_members(player_id)')
+        .from('squads').select('fixture_id, squad_members(player_id)')
         .in('fixture_id', sameDay.map(f => f.id)).eq('published', true)
-      squadRows?.forEach(sq => sq.squad_members?.forEach(sm => conflictIds.push(sm.player_id)))
+      // Build fixture_id → team name lookup
+      const fixtureTeamMap = {}
+      sameDay.forEach(f => { fixtureTeamMap[f.id] = f.teams?.name || 'Another Team' })
+      squadRows?.forEach(sq => {
+        const teamName = fixtureTeamMap[sq.fixture_id] || 'Another Team'
+        sq.squad_members?.forEach(sm => {
+          conflictIds.push(sm.player_id)
+          conflictTeamMap[sm.player_id] = teamName
+        })
+      })
     }
 
     // Sort A–Z
     const list = (members || []).map(m => ({
-      id:       m.player_id,
-      name:     m.profiles?.full_name || 'Unknown',
-      color:    m.profiles?.avatar_color || colors.gold,
-      status:   availMap[m.player_id] || null,
-      conflict: conflictIds.includes(m.player_id),
-    })).sort((a, b) => a.name.localeCompare(b.name))
+      id:             m.player_id,
+      name:           toTitleCase(m.profiles?.full_name) || 'Unknown',
+      color:          m.profiles?.avatar_color || colors.gold,
+      status:         availMap[m.player_id]?.status || null,
+      availUpdatedAt: availMap[m.player_id]?.updatedAt || null,
+      conflict:       conflictIds.includes(m.player_id),
+      conflictTeam:   conflictTeamMap[m.player_id] || null,
+    })).sort((a, b) => {
+      // available → conflict/locked → tentative → unavailable → no reply, A-Z within each
+      const grp = p => {
+        if (p.status === 'available'   && !p.conflict) return 0
+        if (p.conflict)                                return 1
+        if (p.status === 'tentative')                  return 2
+        if (p.status === 'unavailable')                return 3
+        return 4  // no reply
+      }
+      const ga = grp(a), gb = grp(b)
+      if (ga !== gb) return ga - gb
+      return a.name.localeCompare(b.name)
+    })
 
     setPlayers(list)
   }
@@ -212,7 +247,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
     const { data } = await supabase
       .from('squads')
       .select('*, squad_members(player_id, position_order, is_captain, is_wicketkeeper)')
-      .eq('fixture_id', fixtureId).single()
+      .eq('fixture_id', fixtureId).maybeSingle()
 
     if (data) {
       setSquad(data)
@@ -229,15 +264,16 @@ export default function SquadSelectionScreen({ navigation, route }) {
     }
   }
 
-  // Merge player info after both load
+  // Merge player info after both load — also re-fires when fetchSquad resets
+  // selected with empty names (e.g. after Save Draft), since players won't change
   useEffect(() => {
     if (players.length === 0 || selected.length === 0) return
-    if (selected[0]?.name) return
+    if (selected[0]?.name) return   // already merged — guard prevents infinite loop
     setSelected(prev => prev.map(s => {
       const p = players.find(pl => pl.id === s.id)
       return p ? { ...s, name: p.name, color: p.color, status: p.status } : s
     }).filter(s => s.name))
-  }, [players])
+  }, [players, selected])
 
   // ── Toggle player in pool ────────────────────────────────────────────────
   const togglePlayer = useCallback((player) => {
@@ -246,7 +282,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
     if (isSelected) {
       setSelected(prev => prev.filter(s => s.id !== player.id))
     } else {
-      if (player.conflict) { Alert.alert('Conflict', 'This player is in another squad today'); return }
+      if (player.conflict) { Alert.alert('Conflict', `${player.name} is already in the ${player.conflictTeam || 'another team'}\'s squad today`); return }
       setSelected(prev => [...prev, {
         id: player.id, name: player.name, color: player.color,
         status: player.status, isCaptain: false, isWK: false,
@@ -301,8 +337,15 @@ export default function SquadSelectionScreen({ navigation, route }) {
   const wicketkeeper= useMemo(() => selected.find(s => s.isWK),                           [selected])
   const currentPlayerInModal = useMemo(() => selected.find(s => s.id === roleModal.player?.id), [selected, roleModal.player?.id])
 
+  // Filter player pool by search query
+  const filteredPlayers = useMemo(() => {
+    if (!searchQuery.trim()) return players
+    const q = searchQuery.trim().toLowerCase()
+    return players.filter(p => p.name.toLowerCase().includes(q))
+  }, [players, searchQuery])
+
   // ── Save ─────────────────────────────────────────────────────────────────
-  const handleSave = async () => {
+  const handleSave = async (silent = false) => {
     setSaving(true)
     try {
       let squadId = squad?.id
@@ -327,9 +370,11 @@ export default function SquadSelectionScreen({ navigation, route }) {
         )
       }
       await fetchSquad()
-      Alert.alert('Saved', 'Squad draft saved successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ])
+      if (!silent) {
+        Alert.alert('Saved', 'Squad draft saved successfully', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ])
+      }
       return squadId
     } catch (err) {
       Alert.alert('Error', 'Failed to save: ' + err.message)
@@ -362,7 +407,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
         { text: 'Publish', onPress: async () => {
           setSaving(true)
           try {
-            const squadId = await handleSave()
+            const squadId = await handleSave(true)
             if (!squadId) return
 
             // Mark squad as published in Supabase
@@ -391,6 +436,48 @@ export default function SquadSelectionScreen({ navigation, route }) {
             insertNotifications(selectedIds, 'squad_published', notifTitle, notifBody, {
               fixture_id: fixtureId,
             })
+
+            // ── Fantasy Unlocked check ──────────────────────────────────────
+            // After every squad publish, check if ALL fixtures on this matchday
+            // now have a published squad. If so, notify ALL members to pick fantasy.
+            try {
+              const matchDate = fixture?.match_date
+              if (matchDate) {
+                // Get all fixtures for this matchday
+                const { data: sameDayFixtures } = await supabase
+                  .from('fixtures')
+                  .select('id')
+                  .eq('match_date', matchDate)
+
+                if (sameDayFixtures?.length > 0) {
+                  const allFixtureIds = sameDayFixtures.map(f => f.id)
+
+                  // Count how many have a published squad
+                  const { data: publishedSquads } = await supabase
+                    .from('squads')
+                    .select('fixture_id')
+                    .in('fixture_id', allFixtureIds)
+                    .eq('published', true)
+
+                  const publishedCount = publishedSquads?.length || 0
+
+                  // All fixtures on this matchday have published squads → fantasy unlocked
+                  if (publishedCount >= allFixtureIds.length) {
+                    const fantasyTitle = '🏏 Fantasy Unlocked!'
+                    const fantasyBody  = `All squads are set for ${matchDate}. Pick your fantasy XI now!`
+                    const fantasyData  = { type: 'fantasy_unlocked', screen: SCREENS.FANTASY_LEAGUE }
+
+                    // Fire-and-forget — don't block the publish success alert
+                    sendPushToRole('all', fantasyTitle, fantasyBody, fantasyData)
+                    insertNotificationsForRole('all', 'fantasy_unlocked', fantasyTitle, fantasyBody)
+                  }
+                }
+              }
+            } catch (fantasyErr) {
+              // Non-critical — log but don't surface to user
+              console.warn('[SquadPublish] Fantasy unlock check failed:', fantasyErr.message)
+            }
+            // ───────────────────────────────────────────────────────────────
 
             await loadAll()
             Alert.alert('Published!', 'Squad has been published and all selected players have been notified.', [
@@ -507,8 +594,21 @@ export default function SquadSelectionScreen({ navigation, route }) {
         </View>
 
         {/* ── Player pool A–Z ── */}
-        <Text style={styles.poolTitle}>TEAM PLAYERS ({players.length})</Text>
-        {players.map(player => {
+        <View style={styles.poolHeader}>
+          <Text style={styles.poolTitle}>TEAM PLAYERS ({filteredPlayers.length}{searchQuery ? `/${players.length}` : ''})</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search player..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="words"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+        {filteredPlayers.map(player => {
           const isSelected = selected.some(s => s.id === player.id)
           const cfg        = player.status ? AVAILABILITY_CONFIG[player.status] : null
           const canSelect  = !isPublished && !player.conflict
@@ -528,12 +628,25 @@ export default function SquadSelectionScreen({ navigation, route }) {
               <View style={[styles.tickCircle, isSelected && styles.tickCircleActive]}>
                 {isSelected && <Text style={styles.tickMark}>✓</Text>}
               </View>
-              <View style={[styles.avatar, { backgroundColor: player.color + '22', borderColor: player.color + '44' }]}>
-                <Text style={[styles.avatarText, { color: player.color }]}>{getInitials(player.name)}</Text>
-              </View>
+              {player.conflictTeam ? (
+                <View style={styles.conflictBadge}>
+                  <Text style={styles.conflictBadgeText}>⊘</Text>
+                </View>
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: player.color + '22', borderColor: player.color + '44' }]}>
+                  <Text style={[styles.avatarText, { color: player.color }]}>{getInitials(player.name)}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={[styles.playerName, isSelected && styles.playerNameSelected]}>{player.name}</Text>
-                {player.conflict && <Text style={styles.conflictText}>Already in another squad today</Text>}
+                {player.conflictTeam && (
+                  <Text style={styles.conflictTeamLabel}>{player.conflictTeam}</Text>
+                )}
+                {formatAvailTS(player.availUpdatedAt) && (
+                  <Text style={styles.availTimestamp}>
+                    Last Updated: {formatAvailTS(player.availUpdatedAt)}
+                  </Text>
+                )}
               </View>
               {cfg ? (
                 <View style={[styles.availBadge, { backgroundColor: cfg.fillColor, borderColor: cfg.color + '44' }]}>
@@ -745,7 +858,9 @@ const styles = StyleSheet.create({
   roleStatusText:   { fontFamily: fonts.bold, fontSize: 10, color: colors.textMuted, letterSpacing: 0.5 },
   counterHint:  { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
 
-  poolTitle:    { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 2, color: colors.textMuted, marginBottom: spacing.sm },
+  poolHeader:   { marginBottom: spacing.sm },
+  poolTitle:    { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 2, color: colors.textMuted, marginBottom: 8 },
+  searchInput:  { backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontFamily: fonts.medium, fontSize: 13, color: colors.white },
 
   playerRow:         { flexDirection: 'row', alignItems: 'center', gap: 10, padding: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, marginBottom: 7, backgroundColor: colors.navyLight },
   playerRowSelected: { borderColor: 'rgba(245,197,24,0.5)', backgroundColor: 'rgba(245,197,24,0.05)' },
@@ -757,7 +872,10 @@ const styles = StyleSheet.create({
   avatarText:        { fontFamily: fonts.bold, fontSize: 11 },
   playerName:        { fontFamily: fonts.medium, fontSize: 13, color: colors.textLight },
   playerNameSelected:{ fontFamily: fonts.bold, color: colors.white },
-  conflictText:      { fontFamily: fonts.body, fontSize: 10, color: colors.red, marginTop: 1 },
+  conflictTeamLabel: { fontFamily: fonts.bold, fontSize: 10, color: '#EF4444', marginTop: 1, letterSpacing: 0.3 },
+  availTimestamp:    { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
+  conflictBadge:     { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  conflictBadgeText: { fontFamily: fonts.bold, fontSize: 16, color: '#EF4444', lineHeight: 20 },
   availBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   availDot:          { width: 6, height: 6, borderRadius: 3 },
   availText:         { fontFamily: fonts.bold, fontSize: 10 },

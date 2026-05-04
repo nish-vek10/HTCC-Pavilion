@@ -12,7 +12,7 @@ import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { SCREENS } from '../../lib/constants'
+import { SCREENS, toTitleCase } from '../../lib/constants'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
@@ -37,8 +37,12 @@ function getInitials(name) {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
 }
 
-export default function ProfileScreen({ navigation }) {
+export default function ProfileScreen({ navigation, route }) {
   const { profile, setProfile, signOut } = useAuthStore()
+
+  // fromPanel=true when tapped from AdminPanel or CaptainPanel via TopHeader avatar.
+  // In panel context: show "Return to Member View" instead of panel entry buttons.
+  const fromPanel = route?.params?.fromPanel || false
 
   const [fullName,     setFullName]     = useState('')
   const [phone,        setPhone]        = useState('')
@@ -186,40 +190,61 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.pageTitle}>MY PROFILE</Text>
           </View>
 
-          {/* ── Admin Panel button — right under title ── */}
-          {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
+          {/* ── Panel navigation buttons — context-aware ── */}
+          {fromPanel ? (
+            // Inside admin/captain panel → show "Return to Member View"
             <TouchableOpacity
-              style={styles.adminPanelBtn}
-              onPress={() => navigation.getParent()?.navigate('AdminPanel')}
+              style={styles.returnMemberBtn}
+              onPress={() => navigation.getParent()?.navigate('Member')}
               activeOpacity={0.8}
             >
               <View style={styles.panelBtnInner}>
-                <Text style={styles.panelBtnIcon}>⚙️</Text>
+                <Text style={styles.panelBtnIcon}>⚡</Text>
                 <View>
-                  <Text style={styles.adminPanelTitle}>Admin Panel</Text>
-                  <Text style={styles.adminPanelSub}>Members · Fixtures · Matchday · Announcements</Text>
+                  <Text style={styles.returnMemberTitle}>Back to Member View</Text>
+                  <Text style={styles.returnMemberSub}>Return to home dashboard</Text>
                 </View>
               </View>
-              <Text style={styles.adminPanelArrow}>›</Text>
+              <Text style={styles.returnMemberArrow}>›</Text>
             </TouchableOpacity>
-          )}
+          ) : (
+            <>
+              {/* Admin Panel button — shown in member view for admins */}
+              {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
+                <TouchableOpacity
+                  style={styles.adminPanelBtn}
+                  onPress={() => navigation.getParent()?.navigate('AdminPanel')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.panelBtnInner}>
+                    <Text style={styles.panelBtnIcon}>⚙️</Text>
+                    <View>
+                      <Text style={styles.adminPanelTitle}>Admin Panel</Text>
+                      <Text style={styles.adminPanelSub}>Members · Fixtures · Matchday · Announcements</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.adminPanelArrow}>›</Text>
+                </TouchableOpacity>
+              )}
 
-          {/* ── Captain Panel button — right under title ── */}
-          {profile?.role === 'captain' && (
-            <TouchableOpacity
-              style={styles.captainPanelBtn}
-              onPress={() => navigation.getParent()?.navigate('CaptainPanel')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.panelBtnInner}>
-                <AppIcon name="cricketBat" size={22} style={{ marginRight: 0 }} />
-                <View>
-                  <Text style={styles.captainPanelTitle}>Captain Panel</Text>
-                  <Text style={styles.captainPanelSub}>Fixtures · Squad Selection</Text>
-                </View>
-              </View>
-              <Text style={styles.captainPanelArrow}>›</Text>
-            </TouchableOpacity>
+              {/* Captain Panel button — shown in member view for captains */}
+              {profile?.role === 'captain' && (
+                <TouchableOpacity
+                  style={styles.captainPanelBtn}
+                  onPress={() => navigation.getParent()?.navigate('CaptainPanel')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.panelBtnInner}>
+                    <AppIcon name="cricketBat" size={22} style={{ marginRight: 0 }} />
+                    <View>
+                      <Text style={styles.captainPanelTitle}>Captain Panel</Text>
+                      <Text style={styles.captainPanelSub}>Fixtures · Squad Selection</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.captainPanelArrow}>›</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
           {/* ── Profile card ── */}
@@ -231,7 +256,7 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={[styles.avatarText, { color: avatarColor }]}>{initials}</Text>
               </View>
               <View style={styles.identity}>
-                <Text style={styles.identityName}>{profile?.full_name}</Text>
+                <Text style={styles.identityName}>{toTitleCase(profile?.full_name)}</Text>
                 <Text style={styles.identityEmail}>{profile?.email}</Text>
                 <View style={[styles.roleBadge, { backgroundColor: `${roleMeta.color}18`, borderColor: `${roleMeta.color}33` }]}>
                   <View style={[styles.roleDot, { backgroundColor: roleMeta.color }]} />
@@ -456,6 +481,18 @@ const styles = StyleSheet.create({
   mismatch:     { fontFamily: fonts.body, fontSize: 12, color: colors.red, marginTop: -4, marginBottom: spacing.sm },
   pwBtn:        { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border, paddingVertical: 13, borderRadius: radius.md, alignItems: 'center', marginTop: spacing.sm },
   pwBtnText:    { fontFamily: fonts.body, fontWeight: '600', fontSize: 15, color: colors.textLight },
+
+  // ── Return to Member View button — muted/neutral theme ──────────────────
+  returnMemberBtn:   {
+    backgroundColor: 'rgba(139,155,180,0.06)',
+    borderWidth: 1, borderColor: 'rgba(139,155,180,0.25)',
+    borderRadius: radius.md, padding: spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  returnMemberTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.white, marginBottom: 2 },
+  returnMemberSub:   { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  returnMemberArrow: { fontFamily: fonts.bold, fontSize: 22, color: colors.textMuted },
 
   // ── Admin panel button — blue theme ──────────────────────────────────────
   adminPanelBtn:   {

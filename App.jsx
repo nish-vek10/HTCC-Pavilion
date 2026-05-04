@@ -12,14 +12,14 @@ import useAuthStore            from './src/store/authStore'
 import RootNavigator           from './src/navigation/RootNavigator'
 import SplashScreen            from './src/components/SplashV2_Fusion'
 import ErrorBoundary           from './src/components/ErrorBoundary'
-import { registerPushToken }   from './src/lib/pushNotifications'
+import { registerPushToken, setupAndroidChannel } from './src/lib/pushNotifications'
 import * as Notifications      from 'expo-notifications'
 import * as Linking            from 'expo-linking'
 import { SCREENS }             from './src/lib/constants'
 
 // ─── CONFIGURABLE ──────────────────────────────────────────────────────────────
-// Minimum time splash screen is shown in ms — 3500 is enough for animation to complete
-const MIN_SPLASH_MS = 6500
+// Minimum time splash screen is shown in ms — 2200 covers animation + font load
+const MIN_SPLASH_MS = 5000
 // ───────────────────────────────────────────────────────────────────────────────
 
 // ─── Deep link config — maps pavilion:// URLs to navigator screens ────────────
@@ -30,10 +30,11 @@ const linking = {
   config: {
     screens: {
       // Maps pavilion://login → Auth stack → Login screen
-      // Supabase email confirmation tokens processed automatically by onAuthStateChange
+      // Maps pavilion://reset-password → handled via PASSWORD_RECOVERY onAuthStateChange
       Auth: {
         screens: {
-          Login: 'login',
+          Login:         'login',
+          ForgotPassword: 'forgot-password',
         },
       },
     },
@@ -41,7 +42,7 @@ const linking = {
 }
 
 export default function App() {
-  const { setSession, fetchProfile, setLoading } = useAuthStore()
+  const { setSession, fetchProfile, setLoading, setPasswordRecovery } = useAuthStore()
 
   // ─── Navigation ref — used for imperative navigation from push handlers ────
   const navigationRef = useRef(null)
@@ -56,6 +57,12 @@ export default function App() {
     'DMSans-Medium': DMSans_500Medium,
     'DMSans-Bold':   DMSans_700Bold,
   })
+
+  // ─── Android notification channel — must be created before any push arrives ──
+  // Runs at app startup independently of registerPushToken and permission status.
+  // Ensures the OS-level channel 'pavilion-default' exists for background delivery.
+  // No-op on iOS. Idempotent on Android — safe to call every launch.
+  useEffect(() => { setupAndroidChannel() }, [])
 
   // ─── Splash timer ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -74,8 +81,11 @@ export default function App() {
         // App just foregrounded — ensure loading gate is cleared.
         // Auth state is handled by onAuthStateChange (TOKEN_REFRESHED).
         // Only force-clear loading if it was stuck from a previous cycle.
-        const { loading } = useAuthStore.getState()
+        const { loading, session } = useAuthStore.getState()
         if (loading) setLoading(false)
+        // Re-register push token on every foreground — OS can rotate tokens
+        // after OS updates, app reinstalls, or long background periods.
+        if (session?.user?.id) registerPushToken(session.user.id)
       }
     })
     return () => sub.remove()
@@ -111,7 +121,16 @@ export default function App() {
           return
         }
 
-        // All other events: SIGNED_IN, SIGNED_OUT, USER_UPDATED, PASSWORD_RECOVERY
+        // PASSWORD_RECOVERY — user tapped reset link in email
+        // Flag recovery mode so RootNavigator shows ResetPasswordScreen
+        if (event === 'PASSWORD_RECOVERY') {
+          setSession(session)
+          setPasswordRecovery(true)
+          setLoading(false)
+          return
+        }
+
+        // All other events: SIGNED_IN, SIGNED_OUT, USER_UPDATED
         setSession(session)
         if (session?.user) {
           await fetchProfile(session.user.id)
@@ -172,6 +191,11 @@ export default function App() {
     if (!data || !navigationRef.current) return
     console.log('[Push] Routing notification:', data)
 
+    // Training reminder → open session modal in Fixtures tab
+    if (data.type === 'training_reminder' && data.session_id) {
+      navigationRef.current.navigate(SCREENS.FIXTURES, { openSessionId: data.session_id })
+      return
+    }
     // Fixture-linked notifications → go straight to fixture detail
     if (data.fixture_id) {
       navigationRef.current.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: data.fixture_id })

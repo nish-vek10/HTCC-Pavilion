@@ -1,6 +1,6 @@
 // pavilion-app/src/navigation/AdminNavigator.jsx
 // Admin panel navigator — matches member nav style
-// Includes all admin screens + profile tab to return to member view
+// Profile accessed via TopHeader avatar (not a tab)
 
 import React from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -19,7 +19,7 @@ import AdminTrainingAnnouncementsScreen from '../screens/admin/AdminTrainingAnno
 import TrainingDetailScreen     from '../screens/admin/TrainingDetailScreen'
 import SquadSelectionScreen     from '../screens/captain/SquadSelectionScreen'
 import MatchScorecardScreen     from '../screens/admin/MatchScorecardScreen'
-import AdminPanelProfileScreen  from '../screens/admin/AdminPanelProfileScreen'
+import ProfileScreen            from '../screens/member/ProfileScreen'
 
 const Tab   = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -133,14 +133,6 @@ function AdminTabs() {
           tabBarIcon: ({ focused }) => <TabIcon source={icons.training} focused={focused} />,
         }}
       />
-      <Tab.Screen
-        name="AdminPanelProfile"
-        component={AdminPanelProfileScreen}
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon source={icons.profile} focused={focused} />,
-        }}
-      />
     </Tab.Navigator>
   )
 }
@@ -164,6 +156,11 @@ export default function AdminNavigator() {
         name={SCREENS.MATCH_SCORECARD}
         component={MatchScorecardScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name={SCREENS.PROFILE}
+        component={ProfileScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   )

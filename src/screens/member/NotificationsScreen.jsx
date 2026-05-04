@@ -26,7 +26,23 @@ const TYPE_COLOR = {
   welcome:               '#60A5FA',        // blue
   join_approved:         colors.green,
   join_rejected:         colors.red,
+  potm:                  colors.gold,      // gold — player of the match
   custom:                colors.textMuted,
+}
+
+// ─── POTM body renderer — bolds player name and points ────────────────────────
+// Parses: "{name} is POTM vs {opponent} with {pts} pts!"
+function renderPotmBody(body, bodyStyle) {
+  const match = body?.match(/^(.+?) is POTM (.+) with (\d+) pts!$/)
+  if (!match) return <Text style={bodyStyle} numberOfLines={2}>{body}</Text>
+  const [, name, middle, pts] = match
+  return (
+    <Text style={bodyStyle} numberOfLines={2}>
+      <Text style={{ fontFamily: 'DMSans-Bold', color: '#FFFFFF' }}>{name}</Text>
+      {` is POTM ${middle} with `}
+      <Text style={{ fontFamily: 'DMSans-Bold', color: '#FFFFFF' }}>{pts} pts!</Text>
+    </Text>
+  )
 }
 
 function isToday(dateStr) {
@@ -112,13 +128,16 @@ export default function NotificationsScreen({ navigation }) {
 
   const fetchNotifications = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-    if (data) setNotifications(data)
-    setLoading(false)
+    try {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+      if (data) setNotifications(data)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const markAllRead = useCallback(async () => {
@@ -138,6 +157,10 @@ export default function NotificationsScreen({ navigation }) {
     // Navigate to fixture detail if fixture_id is present
     if (notif.fixture_id) {
       navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: notif.fixture_id })
+    }
+    // Navigate to Fixtures tab and open training modal if session_id is present
+    if (notif.type === 'training_reminder' && notif.session_id) {
+      navigation.navigate(SCREENS.FIXTURES, { openSessionId: notif.session_id })
     }
   }, [navigation])
 
@@ -277,11 +300,16 @@ export default function NotificationsScreen({ navigation }) {
                         </Text>
                         <Text style={styles.notifTime}>{formatTime(notif.created_at)}</Text>
                       </View>
-                      <Text style={styles.notifBody} numberOfLines={2}>{notif.body}</Text>
+                      {notif.type === 'potm'
+                        ? renderPotmBody(notif.body, styles.notifBody)
+                        : <Text style={styles.notifBody} numberOfLines={2}>{notif.body}</Text>
+                      }
                       {notif.fixture_id && (
                         <Text style={[styles.notifAction, { color: accentColor }]}>
                           {notif.type === 'squad_published'
                             ? 'Tap to view fixture →'
+                            : notif.type === 'potm'
+                            ? 'Tap to view scorecard →'
                             : 'Tap to set availability →'}
                         </Text>
                       )}

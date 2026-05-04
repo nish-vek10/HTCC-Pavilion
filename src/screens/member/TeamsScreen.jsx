@@ -54,7 +54,7 @@ function formatTime(t) {
 }
 
 // ─── Fixture carousel card ─────────────────────────────────────────────────
-function FixtureCarouselCard({ fixture, myStatus, onSetStatus, onViewDetail }) {
+function FixtureCarouselCard({ fixture, myStatus, onSetStatus, onViewDetail, isMember }) {
   return (
     <View style={styles.carouselCard}>
       {/* Header badges */}
@@ -95,34 +95,43 @@ function FixtureCarouselCard({ fixture, myStatus, onSetStatus, onViewDetail }) {
         </View>
       </View>
 
-      {/* Availability buttons */}
-      <View style={styles.carouselAvailRow}>
-        {['available', 'unavailable', 'tentative'].map(status => {
-          const cfg      = AVAILABILITY_CONFIG[status]
-          const isActive = myStatus === status
-          return (
-            <TouchableOpacity
-              key={status}
-              onPress={() => onSetStatus(fixture.id, status)}
-              activeOpacity={0.75}
-              style={[styles.carouselAvailBtn, {
-                borderColor: isActive ? cfg.color : colors.border,
-                backgroundColor: isActive ? cfg.fillColor : 'transparent',
-              }]}
-            >
-              <View style={[styles.carouselAvailDot, { backgroundColor: isActive ? cfg.color : colors.textMuted }]} />
-              <Text style={[styles.carouselAvailText, { fontFamily: isActive ? fonts.bold : fonts.body, color: isActive ? cfg.color : colors.textMuted }]}>
-                {cfg.label}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
+      {/* Availability buttons — only for own team members */}
+      {isMember ? (
+        <View style={styles.carouselAvailRow}>
+          {['available', 'unavailable', 'tentative'].map(status => {
+            const cfg      = AVAILABILITY_CONFIG[status]
+            const isActive = myStatus === status
+            return (
+              <TouchableOpacity
+                key={status}
+                onPress={() => onSetStatus(fixture.id, status)}
+                activeOpacity={0.75}
+                style={[styles.carouselAvailBtn, {
+                  borderColor: isActive ? cfg.color : colors.border,
+                  backgroundColor: isActive ? cfg.fillColor : 'transparent',
+                }]}
+              >
+                <View style={[styles.carouselAvailDot, { backgroundColor: isActive ? cfg.color : colors.textMuted }]} />
+                <Text style={[styles.carouselAvailText, { fontFamily: isActive ? fonts.bold : fonts.body, color: isActive ? cfg.color : colors.textMuted }]}>
+                  {cfg.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      ) : (
+        <View style={styles.viewOnlyRow}>
+          <AppIcon name="stats" size={11} tint={colors.textMuted} />
+          <Text style={styles.viewOnlyText}>View only — join to set availability</Text>
+        </View>
+      )}
 
-      {/* View detail link */}
-      <TouchableOpacity onPress={() => onViewDetail(fixture.id)} activeOpacity={0.7} style={styles.carouselViewDetail}>
-        <Text style={styles.carouselViewDetailText}>View Details →</Text>
-      </TouchableOpacity>
+      {/* View detail link — members only */}
+      {isMember && (
+        <TouchableOpacity onPress={() => onViewDetail(fixture.id)} activeOpacity={0.7} style={styles.carouselViewDetail}>
+          <Text style={styles.carouselViewDetailText}>View Details →</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -153,14 +162,18 @@ export default function TeamsScreen({ navigation }) {
         fetchJoinRequests()
         fetchMyTeams()
         fetchAllTeams()
+        fetchFixturesAndAvailability()
       }
     }, [profile?.id])
   )
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([fetchMyTeams(), fetchAllTeams(), fetchJoinRequests()])
-    setLoading(false)
+    try {
+      await Promise.all([fetchMyTeams(), fetchAllTeams(), fetchJoinRequests(), fetchFixturesAndAvailability()])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchMyTeams = async () => {
@@ -172,21 +185,19 @@ export default function TeamsScreen({ navigation }) {
     if (data) {
       const teams = sortTeams(data.map(t => t.teams).filter(Boolean))
       setMyTeams(teams)
-      if (teams.length > 0) fetchFixturesAndAvailability(teams.map(t => t.id))
     }
   }
 
-  const fetchFixturesAndAvailability = async (teamIds) => {
+  const fetchFixturesAndAvailability = async () => {
     // toLocalISO — never .toISOString().split('T')[0] (BST shifts date back 1 day)
     const today = toLocalISO(new Date())
-    // limit = 8 per team max — 5 teams × 8 = 40, use 50 for headroom
+    // Fetch ALL teams' upcoming fixtures — gating is done in renderItem via isMember
     const { data: fixtureData } = await supabase
       .from('fixtures')
       .select('*, teams(id, name)')
-      .in('team_id', teamIds)
       .gte('match_date', today)
       .order('match_date', { ascending: true })
-      .limit(50)
+      .limit(80)
 
     if (fixtureData) {
       setFixtures(fixtureData)
@@ -281,8 +292,7 @@ export default function TeamsScreen({ navigation }) {
     return map
   }, [fixtures])
 
-  const satTeams = useMemo(() => allTeams.filter(t => t.day_type === 'saturday'), [allTeams])
-  const sunTeams = useMemo(() => allTeams.filter(t => t.day_type === 'sunday'),   [allTeams])
+  // satTeams / sunTeams removed — all teams now rendered in unified list
 
   return (
     <View style={styles.container}>
@@ -306,197 +316,148 @@ export default function TeamsScreen({ navigation }) {
             </View>
           ) : (
             <>
-              {/* ── My current teams ── */}
-              {myTeams.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <AppIcon name="cricketBat" size={36} tint={colors.textMuted} />
-                  <Text style={styles.emptyTitle}>NOT IN ANY TEAMS YET</Text>
-                  <Text style={styles.emptyText}>
-                    Request to join a team below. A captain or admin will approve your request.
+              {/* ── Not-in-any-teams banner ── */}
+              {myTeams.length === 0 && (
+                <View style={styles.notInTeamsBanner}>
+                  <AppIcon name="cricketBat" size={18} tint={colors.textMuted} />
+                  <Text style={styles.notInTeamsBannerText}>
+                    Not in any teams yet — request to join below.
                   </Text>
                 </View>
-              ) : (
-                myTeams.map(team => {
-                  const tFixtures = (fixturesByTeam[team.id] || [])
-                  const currentIdx = carouselIdx[team.id] || 0
+              )}
 
-                  return (
-                    <View key={team.id} style={styles.teamCard}>
-                      {/* Golden top border */}
-                      <View style={styles.teamCardTopBorder} />
+              {/* ── Pending requests banner ── */}
+              {joinRequests.length > 0 && (
+                <View style={styles.pendingBanner}>
+                  <Text style={styles.pendingBannerText}>
+                    {joinRequests.length} pending join request{joinRequests.length > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              )}
 
-                      {/* Team header */}
-                      <View style={styles.teamCardHeader}>
-                        <View style={styles.teamCardHeaderLeft}>
-                          <View style={styles.teamCrestRing}>
-                            <Image
-                              source={require('../../../assets/htcc-logo.png')}
-                              style={{ width: '100%', height: '100%' }}
-                              resizeMode="cover"
-                            />
-                          </View>
-                          <View>
-                            <Text style={styles.teamName}>{team.name.toUpperCase()}</Text>
-                            <Text style={styles.teamDayType}>{team.day_type} fixture team</Text>
-                          </View>
+              {/* ── All teams — unified list ── */}
+              {allTeams.map(team => {
+                const isMember  = myTeamIds.has(team.id)
+                const isPending = pendingTeamIds.has(team.id)
+                const tFixtures = fixturesByTeam[team.id] || []
+                const currentIdx = carouselIdx[team.id] || 0
+
+                return (
+                  <View key={team.id} style={styles.teamCard}>
+                    {/* Top accent border — gold for members, subtle for others */}
+                    <View style={[styles.teamCardTopBorder, !isMember && { backgroundColor: 'rgba(255,255,255,0.07)' }]} />
+
+                    {/* Team header */}
+                    <View style={styles.teamCardHeader}>
+                      <View style={styles.teamCardHeaderLeft}>
+                        <View style={[styles.teamCrestRing, !isMember && { borderColor: colors.border }]}>
+                          <Image
+                            source={require('../../../assets/htcc-logo.png')}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
                         </View>
+                        <View>
+                          <Text style={[styles.teamName, !isMember && { color: colors.white }]}>
+                            {team.name.toUpperCase()}
+                          </Text>
+                          <Text style={styles.teamDayType}>{team.day_type} fixture team</Text>
+                        </View>
+                      </View>
+
+                      {/* Membership badge / action */}
+                      {isMember ? (
                         <View style={styles.memberBadge}>
                           <Text style={styles.memberBadgeText}>✓ MEMBER</Text>
                         </View>
-                      </View>
-
-                      {/* Fixtures carousel */}
-                      <View style={styles.carouselSection}>
-                        <Text style={styles.upcomingLabel}>UPCOMING FIXTURES</Text>
-
-                        {tFixtures.length === 0 ? (
-                          <Text style={styles.noFixturesText}>No upcoming fixtures for this team.</Text>
-                        ) : (
-                          <>
-                            <FlatList
-                              data={tFixtures}
-                              keyExtractor={f => f.id}
-                              horizontal
-                              snapToInterval={CARD_W + SNAP_GAP}
-                              snapToAlignment="start"
-                              decelerationRate="fast"
-                              showsHorizontalScrollIndicator={false}
-                              onMomentumScrollEnd={e => {
-                                const idx = Math.round(e.nativeEvent.contentOffset.x / (CARD_W + SNAP_GAP))
-                                setCarouselIdx(prev => ({ ...prev, [team.id]: Math.max(0, Math.min(idx, tFixtures.length - 1)) }))
-                              }}
-                              renderItem={({ item }) => (
-                                <View style={{ width: CARD_W, marginRight: SNAP_GAP }}>
-                                  <FixtureCarouselCard
-                                    fixture={item}
-                                    myStatus={availability[item.id] || null}
-                                    onSetStatus={setStatus}
-                                    onViewDetail={(id) => navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: id })}
-                                  />
-                                </View>
-                              )}
-                            />
-
-                            {/* Carousel dots */}
-                            {tFixtures.length > 1 && (
-                              <View style={styles.dotsRow}>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    const newIdx = Math.max(0, currentIdx - 1)
-                                    setCarouselIdx(prev => ({ ...prev, [team.id]: newIdx }))
-                                  }}
-                                  style={styles.carouselArrow}
-                                  disabled={currentIdx === 0}
-                                >
-                                  <Text style={[styles.carouselArrowText, currentIdx === 0 && { opacity: 0.3 }]}>‹</Text>
-                                </TouchableOpacity>
-
-                                {tFixtures.map((_, i) => (
-                                  <View
-                                    key={i}
-                                    style={[
-                                      styles.dot,
-                                      currentIdx === i && styles.dotActive,
-                                    ]}
-                                  />
-                                ))}
-
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    const newIdx = Math.min(tFixtures.length - 1, currentIdx + 1)
-                                    setCarouselIdx(prev => ({ ...prev, [team.id]: newIdx }))
-                                  }}
-                                  style={styles.carouselArrow}
-                                  disabled={currentIdx === tFixtures.length - 1}
-                                >
-                                  <Text style={[styles.carouselArrowText, currentIdx === tFixtures.length - 1 && { opacity: 0.3 }]}>›</Text>
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  )
-                })
-              )}
-
-              {/* ── Join a team section ── */}
-              <View style={styles.joinSection}>
-                <Text style={styles.sectionLabel}>CLUB TEAMS</Text>
-                <Text style={styles.sectionTitle}>Join a Team</Text>
-                <Text style={styles.sectionSub}>Request to join a team. Your captain or admin will approve it.</Text>
-
-                {joinRequests.length > 0 && (
-                  <View style={styles.pendingBanner}>
-                    <Text style={styles.pendingBannerText}>
-                      {joinRequests.length} pending join request{joinRequests.length > 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Saturday teams 2×2 grid */}
-                {satTeams.length > 0 && (
-                  <View style={styles.joinGrid}>
-                    {satTeams.map(team => {
-                      const alreadyIn = myTeamIds.has(team.id)
-                      const pending   = pendingTeamIds.has(team.id)
-                      return (
-                        <View key={team.id} style={[styles.joinCard, pending && styles.joinCardPending]}>
-                          <View style={styles.joinCrestRing}>
-                            <Image source={require('../../../assets/htcc-logo.png')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                          </View>
-                          <Text style={styles.joinTeamName}>{team.name.toUpperCase()}</Text>
-                          <Text style={styles.joinDayType}>{team.day_type} fixture</Text>
-                          {alreadyIn ? (
-                            <View style={styles.memberTag}>
-                              <Text style={styles.memberTagText}>✓ Member</Text>
-                            </View>
-                          ) : pending ? (
-                            <TouchableOpacity onPress={() => handleCancelJoin(team.id)} activeOpacity={0.75} style={styles.pendingBtn}>
-                              <Text style={styles.pendingBtnText}>Requested</Text>
-                            </TouchableOpacity>
-                          ) : (
-                            <TouchableOpacity onPress={() => setJoinModal({ open: true, team })} activeOpacity={0.75} style={styles.joinBtn}>
-                              <Text style={styles.joinBtnText}>+ Request to Join</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )
-                    })}
-                  </View>
-                )}
-
-                {/* Sunday teams full width */}
-                {sunTeams.map(team => {
-                  const alreadyIn = myTeamIds.has(team.id)
-                  const pending   = pendingTeamIds.has(team.id)
-                  return (
-                    <View key={team.id} style={[styles.joinCardWide, pending && styles.joinCardPending]}>
-                      <View style={styles.joinCardWideLeft}>
-                        <View style={styles.joinCrestRing}>
-                          <Image source={require('../../../assets/htcc-logo.png')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                        </View>
-                        <View>
-                          <Text style={styles.joinTeamName}>{team.name.toUpperCase()}</Text>
-                          <Text style={styles.joinDayType}>{team.day_type} fixture</Text>
-                        </View>
-                      </View>
-                      {alreadyIn ? (
-                        <View style={styles.memberTag}><Text style={styles.memberTagText}>✓ Member</Text></View>
-                      ) : pending ? (
-                        <TouchableOpacity onPress={() => handleCancelJoin(team.id)} activeOpacity={0.75} style={styles.pendingBtnSm}>
+                      ) : isPending ? (
+                        <TouchableOpacity
+                          onPress={() => handleCancelJoin(team.id)}
+                          activeOpacity={0.75}
+                          style={styles.pendingBtnSm}
+                        >
                           <Text style={styles.pendingBtnText}>Requested</Text>
                         </TouchableOpacity>
                       ) : (
-                        <TouchableOpacity onPress={() => setJoinModal({ open: true, team })} activeOpacity={0.75} style={styles.joinBtnSm}>
-                          <Text style={styles.joinBtnText}>+ Request</Text>
+                        <TouchableOpacity
+                          onPress={() => setJoinModal({ open: true, team })}
+                          activeOpacity={0.75}
+                          style={styles.joinBtnSm}
+                        >
+                          <Text style={styles.joinBtnText}>+ Join</Text>
                         </TouchableOpacity>
                       )}
                     </View>
-                  )
-                })}
-              </View>
+
+                    {/* Fixtures carousel */}
+                    <View style={styles.carouselSection}>
+                      <Text style={styles.upcomingLabel}>UPCOMING FIXTURES</Text>
+
+                      {tFixtures.length === 0 ? (
+                        <Text style={styles.noFixturesText}>No upcoming fixtures for this team.</Text>
+                      ) : (
+                        <>
+                          <FlatList
+                            data={tFixtures}
+                            keyExtractor={f => f.id}
+                            horizontal
+                            snapToInterval={CARD_W + SNAP_GAP}
+                            snapToAlignment="start"
+                            decelerationRate="fast"
+                            showsHorizontalScrollIndicator={false}
+                            onMomentumScrollEnd={e => {
+                              const idx = Math.round(e.nativeEvent.contentOffset.x / (CARD_W + SNAP_GAP))
+                              setCarouselIdx(prev => ({ ...prev, [team.id]: Math.max(0, Math.min(idx, tFixtures.length - 1)) }))
+                            }}
+                            renderItem={({ item }) => (
+                              <View style={{ width: CARD_W, marginRight: SNAP_GAP }}>
+                                <FixtureCarouselCard
+                                  fixture={item}
+                                  myStatus={availability[item.id] || null}
+                                  onSetStatus={setStatus}
+                                  onViewDetail={(id) => navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: id })}
+                                  isMember={isMember}
+                                />
+                              </View>
+                            )}
+                          />
+
+                          {/* Carousel dots + arrows */}
+                          {tFixtures.length > 1 && (
+                            <View style={styles.dotsRow}>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const newIdx = Math.max(0, currentIdx - 1)
+                                  setCarouselIdx(prev => ({ ...prev, [team.id]: newIdx }))
+                                }}
+                                style={styles.carouselArrow}
+                                disabled={currentIdx === 0}
+                              >
+                                <Text style={[styles.carouselArrowText, currentIdx === 0 && { opacity: 0.3 }]}>‹</Text>
+                              </TouchableOpacity>
+
+                              {tFixtures.map((_, i) => (
+                                <View key={i} style={[styles.dot, currentIdx === i && styles.dotActive]} />
+                              ))}
+
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const newIdx = Math.min(tFixtures.length - 1, currentIdx + 1)
+                                  setCarouselIdx(prev => ({ ...prev, [team.id]: newIdx }))
+                                }}
+                                style={styles.carouselArrow}
+                                disabled={currentIdx === tFixtures.length - 1}
+                              >
+                                <Text style={[styles.carouselArrowText, currentIdx === tFixtures.length - 1 && { opacity: 0.3 }]}>›</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </View>
+                )
+              })}
 
               <View style={{ height: 32 }} />
             </>
@@ -596,4 +557,12 @@ const styles = StyleSheet.create({
   joinBtn:         { width: '100%', paddingVertical: 9, borderRadius: radius.md, backgroundColor: 'rgba(96,165,250,0.08)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.3)', alignItems: 'center' },
   joinBtnSm:       { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md, backgroundColor: 'rgba(96,165,250,0.08)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.3)', alignItems: 'center' },
   joinBtnText:     { fontFamily: fonts.bold, fontSize: 12, color: '#60A5FA' },
+
+  // ── Not-in-any-teams banner ───────────────────────────────────────────────
+  notInTeamsBanner:     { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 14, marginBottom: spacing.md },
+  notInTeamsBannerText: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, flex: 1 },
+
+  // ── View-only row (non-member fixture carousel) ───────────────────────────
+  viewOnlyRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, marginBottom: 10 },
+  viewOnlyText: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, fontStyle: 'italic' },
 })

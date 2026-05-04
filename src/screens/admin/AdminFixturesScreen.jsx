@@ -13,11 +13,19 @@ import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { SCREENS, MATCH_TYPE_LABELS } from '../../lib/constants'
+import { SCREENS, MATCH_TYPE_LABELS, teamColor } from '../../lib/constants'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
 const EMPTY_FORM = { team_id: '', opponent: '', venue: '', match_date: '', match_time: '12:30', match_type: 'league', home_away: 'home' }
+
+function xiRank(name = '') {
+  if (name.includes('1st')) return 0
+  if (name.includes('2nd')) return 1
+  if (name.includes('3rd')) return 2
+  if (name.includes('4th')) return 3
+  return 4
+}
 
 const toISO      = (dd_mm_yyyy) => {
   if (!dd_mm_yyyy || dd_mm_yyyy.length !== 10) return ''
@@ -55,6 +63,8 @@ export default function AdminFixturesScreen({ navigation }) {
   const [editingId,   setEditingId]   = useState(null)
   const [submitting,     setSubmitting]     = useState(false)
   const [reminding,      setReminding]      = useState(null)
+  const [availCounts,    setAvailCounts]    = useState({})   // { [fixtureId]: {available,tentative,unavailable} }
+  const [memberCounts,   setMemberCounts]   = useState({})   // { [teamId]: count }
   const [datePickerOpen, setDatePickerOpen] = useState(false)
 
   // Modal pickers state
@@ -67,9 +77,12 @@ export default function AdminFixturesScreen({ navigation }) {
   const loadAll = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    await Promise.all([fetchFixtures(), fetchTeams()])
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      await Promise.all([fetchFixtures(), fetchTeams()])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   const fetchTeams = async () => {
@@ -81,7 +94,33 @@ export default function AdminFixturesScreen({ navigation }) {
     const { data } = await supabase.from('fixtures')
       .select('*, teams(name), squads(id, published)')
       .order('match_date', { ascending: true })
-    if (data) setFixtures(data)
+    if (!data) return
+    setFixtures(data)
+
+    const fixtureIds = data.map(f => f.id)
+    const teamIds    = [...new Set(data.map(f => f.team_id))]
+
+    const [{ data: avail }, { data: members }] = await Promise.all([
+      fixtureIds.length
+        ? supabase.from('availability').select('fixture_id, status').in('fixture_id', fixtureIds)
+        : Promise.resolve({ data: [] }),
+      teamIds.length
+        ? supabase.from('team_members').select('team_id').in('team_id', teamIds).eq('status', 'active')
+        : Promise.resolve({ data: [] }),
+    ])
+
+    // availability counts per fixture
+    const ac = {}
+    avail?.forEach(a => {
+      if (!ac[a.fixture_id]) ac[a.fixture_id] = { available: 0, tentative: 0, unavailable: 0 }
+      if (ac[a.fixture_id][a.status] !== undefined) ac[a.fixture_id][a.status]++
+    })
+    setAvailCounts(ac)
+
+    // active member count per team
+    const mc = {}
+    members?.forEach(m => { mc[m.team_id] = (mc[m.team_id] || 0) + 1 })
+    setMemberCounts(mc)
   }
 
   const handleEdit = (fixture) => {
@@ -158,36 +197,43 @@ export default function AdminFixturesScreen({ navigation }) {
   }
 
   // ─── Split into upcoming and past ────────────────────────────────────────
-  // Use Monday 00:00 as the cutoff — Saturday and Sunday fixtures stay in
-  // "upcoming" all weekend and move to archive together on Monday morning
+
+// Local ISO date (BST-safe) — avoids UTC midnight date-shift
+function toLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+  // Fixtures archive at 20:00 on match day — before 8pm they stay upcoming
   const [showArchive, setShowArchive] = useState(false)
 
-  // Cache Monday ISO — avoids creating new Date objects on every render
-  const thisMondayISO = useMemo(() => {
-    const today = new Date()
-    const day   = today.getDay()
-    const diff  = day === 0 ? -6 : 1 - day
-    const mon   = new Date(today)
-    mon.setDate(today.getDate() + diff)
-    mon.setHours(0, 0, 0, 0)
-    const year  = mon.getFullYear()
-    const month = String(mon.getMonth() + 1).padStart(2, '0')
-    const d     = String(mon.getDate()).padStart(2, '0')
-    return `${year}-${month}-${d}`
+  // cutoffISO: if now >= 20:00 → cutoff = tomorrow (today's match archived)
+  //            if now < 20:00  → cutoff = today    (today's match still upcoming)
+  const cutoffISO = useMemo(() => {
+    const now = new Date()
+    if (now.getHours() >= 20) {
+      const tomorrow = new Date(now)
+      tomorrow.setDate(now.getDate() + 1)
+      return toLocalISO(tomorrow)
+    }
+    return toLocalISO(now)
   }, [])
 
   const upcomingFixtures = useMemo(
-    () => fixtures.filter(f => f.match_date >= thisMondayISO),
-    [fixtures, thisMondayISO]
+    () => fixtures.filter(f => f.match_date >= cutoffISO),
+    [fixtures, cutoffISO]
   )
   const pastFixtures = useMemo(
-    () => fixtures.filter(f => f.match_date < thisMondayISO),
-    [fixtures, thisMondayISO]
+    () => fixtures.filter(f => f.match_date < cutoffISO),
+    [fixtures, cutoffISO]
   )
 
   // Group upcoming by month — memoised to avoid re-running reduce on every render
   const upcomingSections = useMemo(() => {
-    const grouped = upcomingFixtures.reduce((acc, f) => {
+    // Secondary sort: within same date, 1XI → 2XI → 3XI → 4XI
+    const sorted = [...upcomingFixtures].sort((a, b) => {
+      if (a.match_date !== b.match_date) return a.match_date.localeCompare(b.match_date)
+      return xiRank(a.teams?.name) - xiRank(b.teams?.name)
+    })
+    const grouped = sorted.reduce((acc, f) => {
       const month = format(parseISO(f.match_date), 'MMMM yyyy')
       if (!acc[month]) acc[month] = []
       acc[month].push(f)
@@ -325,10 +371,14 @@ export default function AdminFixturesScreen({ navigation }) {
         {/* ── Archive list ── */}
         {!loading && showArchive && pastFixtures.length > 0 && (
           <View style={styles.archiveSection}>
-            {pastFixtures.sort((a,b) => b.match_date.localeCompare(a.match_date)).map(fixture => {
-              const isPublished = fixture.squads?.[0]?.published || false
+            {[...pastFixtures].sort((a,b) => {
+              if (a.match_date !== b.match_date) return b.match_date.localeCompare(a.match_date)
+              return xiRank(a.teams?.name) - xiRank(b.teams?.name)
+            }).map(fixture => {
+              const isPublished = fixture.squads?.published || false
+              const tCol = teamColor(fixture.teams?.name)
               return (
-                <View key={fixture.id} style={[styles.fixtureCard, styles.archiveCard]}>
+                <View key={fixture.id} style={[styles.fixtureCard, styles.archiveCard, { borderLeftColor: tCol, borderLeftWidth: 3 }]}>
                   <View style={styles.fixtureCardTop}>
                     <View style={styles.fixtureDateBlock}>
                       <Text style={[styles.fixtureDateNum, styles.archiveDateNum]}>{format(parseISO(fixture.match_date), 'dd')}</Text>
@@ -336,7 +386,9 @@ export default function AdminFixturesScreen({ navigation }) {
                     </View>
                     <View style={styles.fixtureInfo}>
                       <View style={styles.tagRow}>
-                        <View style={styles.teamBadge}><Text style={styles.teamBadgeText}>{fixture.teams?.name}</Text></View>
+                        <View style={[styles.teamBadge, { backgroundColor: tCol + '18', borderColor: tCol + '44' }]}>
+                          <Text style={[styles.teamBadgeText, { color: tCol }]}>{fixture.teams?.name}</Text>
+                        </View>
                         <View style={styles.pastBadge}><Text style={styles.pastBadgeText}>PLAYED</Text></View>
                       </View>
                       <Text style={styles.fixtureTitle}>
@@ -358,9 +410,17 @@ export default function AdminFixturesScreen({ navigation }) {
                       activeOpacity={0.8}>
                       <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Squad'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
-                      <AppIcon name="edit" size={14} tint={colors.gold} />
-                    </TouchableOpacity>
+                    {isPublished ? (
+                      <TouchableOpacity style={styles.scorecardBtn}
+                        onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
+                        activeOpacity={0.8}>
+                        <Text style={styles.scorecardBtnText}>Submit Scores</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
+                        <AppIcon name="edit" size={14} tint={colors.gold} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
                       <AppIcon name="delete" size={14} tint={colors.red} />
                     </TouchableOpacity>
@@ -390,17 +450,20 @@ export default function AdminFixturesScreen({ navigation }) {
             // Fixture items — grouped in a single direct child of ScrollView
             <View key={`mi-${section.title}`} style={styles.monthItemsGroup}>
               {section.data.map(fixture => {
-                const isPublished = fixture.squads?.[0]?.published || false
+                const isPublished = fixture.squads?.published || false
+                const tCol = teamColor(fixture.teams?.name)
                 return (
-                  <View key={fixture.id} style={styles.fixtureCard}>
+                  <View key={fixture.id} style={[styles.fixtureCard, { borderLeftColor: tCol, borderLeftWidth: 3 }]}>
                     <View style={styles.fixtureCardTop}>
                       <View style={styles.fixtureDateBlock}>
-                        <Text style={styles.fixtureDateNum}>{format(parseISO(fixture.match_date), 'dd')}</Text>
+                        <Text style={[styles.fixtureDateNum, { color: tCol }]}>{format(parseISO(fixture.match_date), 'dd')}</Text>
                         <Text style={styles.fixtureDow}>{format(parseISO(fixture.match_date), 'EEE').toUpperCase()}</Text>
                       </View>
                       <View style={styles.fixtureInfo}>
                         <View style={styles.tagRow}>
-                          <View style={styles.teamBadge}><Text style={styles.teamBadgeText}>{fixture.teams?.name}</Text></View>
+                          <View style={[styles.teamBadge, { backgroundColor: tCol + '18', borderColor: tCol + '44' }]}>
+                            <Text style={[styles.teamBadgeText, { color: tCol }]}>{fixture.teams?.name}</Text>
+                          </View>
                           {(() => {
                             const hwCfg = fixture.home_away === 'home'
                               ? { icon: 'homeFixture', label: 'HOME',    color: colors.green,     bg: 'rgba(34,197,94,0.1)',      border: 'rgba(34,197,94,0.25)' }
@@ -429,6 +492,31 @@ export default function AdminFixturesScreen({ navigation }) {
                         </View>
                       </View>
                     </View>
+                    {/* Availability strip */}
+                    {(() => {
+                      const ac      = availCounts[fixture.id] || {}
+                      const avail   = ac.available   || 0
+                      const tent    = ac.tentative   || 0
+                      const unavail = ac.unavailable || 0
+                      const total   = memberCounts[fixture.team_id] || 0
+                      const noReply = Math.max(0, total - avail - tent - unavail)
+                      if (!total) return null
+                      return (
+                        <View style={styles.availSection}>
+                          <View style={styles.availCountRow}>
+                            {avail   > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:colors.green}]}/><Text style={[styles.availCount,{color:colors.green}]}>{avail}</Text><Text style={styles.availLabel}>Available</Text></View>}
+                            {tent    > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:'#F97316'}]}/><Text style={[styles.availCount,{color:'#F97316'}]}>{tent}</Text><Text style={styles.availLabel}>Tentative</Text></View>}
+                            {unavail > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:colors.red}]}/><Text style={[styles.availCount,{color:colors.red}]}>{unavail}</Text><Text style={styles.availLabel}>No</Text></View>}
+                            {noReply > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:'rgba(255,255,255,0.18)'}]}/><Text style={[styles.availCount,{color:colors.textMuted}]}>{noReply}</Text><Text style={styles.availLabel}>No reply</Text></View>}
+                          </View>
+                          <View style={styles.progressBar}>
+                            {avail   > 0 && <View style={{width:`${(avail/total)*100}%`,   backgroundColor:colors.green, height:'100%'}}/>}
+                            {tent    > 0 && <View style={{width:`${(tent/total)*100}%`,    backgroundColor:'#F97316',    height:'100%'}}/>}
+                            {unavail > 0 && <View style={{width:`${(unavail/total)*100}%`, backgroundColor:colors.red,   height:'100%'}}/>}
+                          </View>
+                        </View>
+                      )
+                    })()}
                     {/* Action buttons */}
                     <View style={styles.actionRow}>
                       <TouchableOpacity style={styles.squadBtn}
@@ -436,19 +524,34 @@ export default function AdminFixturesScreen({ navigation }) {
                         activeOpacity={0.8}>
                         <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Select Squad'}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.remindBtn}
-                        onPress={() => handleRemind(fixture)} disabled={reminding === fixture.id} activeOpacity={0.8}>
-                        {reminding === fixture.id
-                          ? <Text style={styles.remindBtnText}>…</Text>
-                          : <AppIcon name="alerts" size={14} tint="#60A5FA" />
-                        }
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
-                        <AppIcon name="edit" size={14} tint={colors.gold} />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
-                        <AppIcon name="delete" size={14} tint={colors.red} />
-                      </TouchableOpacity>
+                      {isPublished ? (
+                        <>
+                          <TouchableOpacity style={styles.scorecardBtn}
+                            onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
+                            activeOpacity={0.8}>
+                            <Text style={styles.scorecardBtnText}>Submit Scores</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
+                            <AppIcon name="delete" size={14} tint={colors.red} />
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity style={styles.remindBtn}
+                            onPress={() => handleRemind(fixture)} disabled={reminding === fixture.id} activeOpacity={0.8}>
+                            {reminding === fixture.id
+                              ? <Text style={styles.remindBtnText}>…</Text>
+                              : <AppIcon name="alerts" size={14} tint="#60A5FA" />
+                            }
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
+                            <AppIcon name="edit" size={14} tint={colors.gold} />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
+                            <AppIcon name="delete" size={14} tint={colors.red} />
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   </View>
                 )
@@ -614,6 +717,8 @@ const styles = StyleSheet.create({
   actionRow:        { flexDirection: 'row', gap: 6, padding: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   squadBtn:         { flex: 2, backgroundColor: colors.gold, borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   squadBtnText:     { fontFamily: fonts.bold, fontSize: 12, color: colors.navy },
+  scorecardBtn:     { flex: 2, backgroundColor: 'rgba(245,197,24,0.12)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.35)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+  scorecardBtnText: { fontFamily: fonts.bold, fontSize: 12, color: colors.gold },
   remindBtn:        { flex: 1, backgroundColor: 'rgba(96,165,250,0.1)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.25)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   remindBtnText:    { fontFamily: fonts.bold, fontSize: 14, color: '#60A5FA' },
   editBtn:          { flex: 1, backgroundColor: 'rgba(245,197,24,0.08)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.25)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
@@ -632,6 +737,15 @@ const styles = StyleSheet.create({
   archiveDateNum:     { color: colors.textMuted },
   pastBadge:          { backgroundColor: 'rgba(139,155,180,0.1)', borderWidth: 1, borderColor: 'rgba(139,155,180,0.2)', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
   pastBadgeText:      { fontFamily: fonts.bold, fontSize: 10, color: colors.textMuted },
+
+  // ── Availability strip ────────────────────────────────────────────────────
+  availSection:   { paddingHorizontal: spacing.sm, paddingBottom: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)' },
+  availCountRow:  { flexDirection: 'row', gap: 10, flexWrap: 'wrap', paddingTop: 8, paddingBottom: 6 },
+  availItem:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  availDot:       { width: 7, height: 7, borderRadius: 4 },
+  availCount:     { fontFamily: fonts.bold, fontSize: 11 },
+  availLabel:     { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  progressBar:    { height: 3, backgroundColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', overflow: 'hidden', borderRadius: 2 },
 
   modalBackdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet:       { backgroundColor: colors.navyLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: 'rgba(245,197,24,0.15)', padding: spacing.lg, paddingBottom: 40 },

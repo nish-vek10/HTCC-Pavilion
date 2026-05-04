@@ -3,14 +3,13 @@
 //
 // Layout:
 //   LEFT  → Pavilion icon  |  PAVILION / HTCC text stack
-//   RIGHT → HTCC crest  |  gold divider  |  Profile avatar (tappable → role-correct ProfileScreen)
+//   RIGHT → HTCC crest  |  gold divider  |  Profile avatar (tappable → ProfileScreen)
 //
-// Avatar tap navigation — role-based:
-//   member     → 'Profile'           (stack screen in MemberNavigator)
-//   admin      → 'AdminPanelProfile' (tab in AdminNavigator)
-//   captain    → 'CaptainPanelProfile' (tab in CaptainNavigator)
+// Avatar tap navigation:
+//   All roles → navigate(SCREENS.PROFILE, { fromPanel })
+//   fromPanel=true when tapped from inside AdminPanel or CaptainPanel
 //
-// When already on the profile screen, avatar tap = go back (member) or no-op (admin/captain — already on tab).
+// When already on ProfileScreen, avatar tap = goBack (returns to panel or member view)
 
 import React, { useCallback } from 'react'
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native'
@@ -20,38 +19,19 @@ import { colors, fonts } from '../../theme'
 import useAuthStore from '../../store/authStore'
 import { SCREENS } from '../../lib/constants'
 
-// ─── Profile navigation per role ──────────────────────────────────────────────
-// FULL ROOT PATH required for admin/captain:
-//   AdminPanelProfile lives under RootNavigator > AdminPanel > AdminTabs
-//   CaptainPanelProfile lives under RootNavigator > CaptainPanel > CaptainTabs
-//   Using the partial path ('AdminTabs') fails when called from member screens
-//   because AdminTabs is in a sibling branch, not visible from MemberNavigator.
-//   The full 3-level path works from ANY context in the app — React Navigation
-//   will navigate to AdminPanel (pushing it if not active), then switch the tab.
-//
-// Member Profile is a Stack.Screen in MemberNavigator — direct name works fine.
-const PROFILE_NAV = {
-  member:     (nav) => nav.navigate(SCREENS.PROFILE),
-  captain:    (nav) => nav.navigate('CaptainPanel', {
-                         screen: 'CaptainTabs',
-                         params: { screen: 'CaptainPanelProfile' },
-                       }),
-  admin:      (nav) => nav.navigate('AdminPanel',   {
-                         screen: 'AdminTabs',
-                         params: { screen: 'AdminPanelProfile' },
-                       }),
-  superadmin: (nav) => nav.navigate('AdminPanel',   {
-                         screen: 'AdminTabs',
-                         params: { screen: 'AdminPanelProfile' },
-                       }),
-  pending:    null,
-}
-
-// All screen names that ARE a profile screen — used for isOnProfile active state
-const PROFILE_SCREEN_NAMES = new Set([
-  SCREENS.PROFILE,
-  'AdminPanelProfile',
-  'CaptainPanelProfile',
+// ─── Admin/Captain panel screen names ─────────────────────────────────────────
+// Used to detect isInPanel — when true, avatar tap passes fromPanel=true to
+// ProfileScreen so it shows "Return to Member View" instead of panel entry buttons.
+const PANEL_SCREEN_NAMES = new Set([
+  SCREENS.ADMIN_DASHBOARD,
+  SCREENS.ADMIN_MATCHDAY,
+  SCREENS.ADMIN_FIXTURES,
+  SCREENS.ADMIN_MEMBERS,
+  SCREENS.ADMIN_TRAINING,
+  SCREENS.TRAINING_DETAIL,
+  SCREENS.SQUAD_SELECTION,
+  SCREENS.MATCH_SCORECARD,
+  SCREENS.CAPTAIN_FIXTURES,
 ])
 
 // ─── CONFIGURABLE ─────────────────────────────────────────────────────────────
@@ -89,28 +69,28 @@ export default function TopHeader() {
   const route      = useRoute()
   const profile    = useAuthStore(s => s.profile)
 
-  const ringColor   = ROLE_RING[profile?.role] || colors.textMuted
-  const initials    = getInitials(profile?.full_name)
+  const ringColor = ROLE_RING[profile?.role] || colors.textMuted
+  const initials  = getInitials(profile?.full_name)
+  const isPending = profile?.role === 'pending'
 
-  // nav function for this role — null for pending (no profile yet)
-  const profileNav  = PROFILE_NAV[profile?.role] || null
+  // True when currently on ProfileScreen (pushed in any navigator)
+  const isOnProfile = route.name === SCREENS.PROFILE
 
-  // True when any profile screen variant is currently the active route
-  const isOnProfile = PROFILE_SCREEN_NAMES.has(route.name)
+  // True when inside an admin/captain panel screen — drives fromPanel param
+  const isInPanel = PANEL_SCREEN_NAMES.has(route.name)
 
   const handleAvatarPress = useCallback(() => {
-    if (!profileNav) return   // pending users have no profile to navigate to
+    if (isPending) return   // pending users: no profile navigation
 
     if (isOnProfile) {
-      // Member: profile is a pushed stack screen — goBack dismisses it cleanly
-      // Admin/Captain: profile is a tab — goBack if there's stack history, otherwise no-op
+      // ProfileScreen is always a pushed stack screen — goBack returns cleanly
       if (navigation.canGoBack()) navigation.goBack()
       return
     }
 
-    // Navigate using the role-correct path (handles nested navigators correctly)
-    profileNav(navigation)
-  }, [navigation, isOnProfile, profileNav])
+    // Navigate to ProfileScreen — pass fromPanel so screen can show correct action
+    navigation.navigate(SCREENS.PROFILE, { fromPanel: isInPanel })
+  }, [navigation, isOnProfile, isInPanel, isPending])
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>

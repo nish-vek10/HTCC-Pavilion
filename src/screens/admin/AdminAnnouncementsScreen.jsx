@@ -9,6 +9,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '../../lib/supabase'
+import { toTitleCase } from '../../lib/constants'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import AppIcon   from '../../components/AppIcon'
@@ -45,12 +46,15 @@ export default function AdminAnnouncementsScreen({ navigation, embedded = false 
   const fetchAnnouncements = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    const { data } = await supabase.from('announcements')
-      .select('id, title, body, target_role, created_at, profiles(full_name)')
-      .order('created_at', { ascending: false })
-    if (data) setAnnouncements(data)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const { data } = await supabase.from('announcements')
+        .select('id, title, body, target_role, created_at, profiles(full_name)')
+        .order('created_at', { ascending: false })
+      if (data) setAnnouncements(data)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   // ── Open edit form pre-populated with existing announcement ───────────────
@@ -301,7 +305,7 @@ export default function AdminAnnouncementsScreen({ navigation, embedded = false 
                   </TouchableOpacity>
                 )}
                 {ann.profiles?.full_name && (
-                  <Text style={styles.postedBy}>Posted by {ann.profiles.full_name}</Text>
+                  <Text style={styles.postedBy}>Posted by {toTitleCase(ann.profiles.full_name)}</Text>
                 )}
               </View>
             )

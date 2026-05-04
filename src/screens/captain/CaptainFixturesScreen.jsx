@@ -1,7 +1,7 @@
 // pavilion-app/src/screens/captain/CaptainFixturesScreen.jsx
 // Captain fixture management — add, edit, delete, remind, select squad
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal,
@@ -40,9 +40,31 @@ export default function CaptainFixturesScreen({ navigation }) {
   const [editingId,    setEditingId]    = useState(null)
   const [submitting,   setSubmitting]   = useState(false)
   const [reminding,    setReminding]    = useState(null)
+  const [availCounts,  setAvailCounts]  = useState({})   // { [fixtureId]: {available,tentative,unavailable} }
+  const [memberCounts, setMemberCounts] = useState({})   // { [teamId]: count }
   const [typePickerOpen, setTypePickerOpen] = useState(false)
   const [haPickerOpen,   setHaPickerOpen]   = useState(false)
   const [teamPickerOpen, setTeamPickerOpen] = useState(false)
+  const [showArchive,    setShowArchive]    = useState(false)
+
+
+// Local ISO date (BST-safe) — avoids UTC midnight date-shift
+function toLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+  // Fixtures archive at 20:00 on match day — before 8pm they stay upcoming
+  const cutoffISO = useMemo(() => {
+    const now = new Date()
+    if (now.getHours() >= 20) {
+      const tomorrow = new Date(now)
+      tomorrow.setDate(now.getDate() + 1)
+      return toLocalISO(tomorrow)
+    }
+    return toLocalISO(now)
+  }, [])
+
+  const upcomingFixtures = useMemo(() => fixtures.filter(f => f.match_date >= cutoffISO), [fixtures, cutoffISO])
+  const pastFixtures     = useMemo(() => fixtures.filter(f => f.match_date < cutoffISO),  [fixtures, cutoffISO])
 
   useFocusEffect(useCallback(() => { loadTeam() }, []))
   useFocusEffect(useCallback(() => { if (selectedTeamId) fetchFixtures() }, [selectedTeamId]))
@@ -50,17 +72,19 @@ export default function CaptainFixturesScreen({ navigation }) {
   const loadTeam = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-
-    if (isAdmin?.()) {
-      const { data } = await supabase.from('teams').select('id, name, day_type').order('name')
-      if (data) { setAllTeams(data); if (!selectedTeamId) setSelectedTeamId(data[0]?.id || null) }
-    } else {
-      const { data: tm } = await supabase.from('team_members')
-        .select('teams(id, name, day_type)').eq('player_id', profile.id).eq('status', 'active').limit(1).single()
-      if (tm?.teams) { setMyTeam(tm.teams); setSelectedTeamId(tm.teams.id) }
+    try {
+      if (isAdmin?.()) {
+        const { data } = await supabase.from('teams').select('id, name, day_type').order('name')
+        if (data) { setAllTeams(data); if (!selectedTeamId) setSelectedTeamId(data[0]?.id || null) }
+      } else {
+        const { data: tm } = await supabase.from('team_members')
+          .select('teams(id, name, day_type)').eq('player_id', profile.id).eq('status', 'active').limit(1).single()
+        if (tm?.teams) { setMyTeam(tm.teams); setSelectedTeamId(tm.teams.id) }
+      }
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setLoading(false)
-    setRefreshing(false)
   }
 
   const fetchFixtures = async () => {
@@ -68,7 +92,27 @@ export default function CaptainFixturesScreen({ navigation }) {
     const { data } = await supabase.from('fixtures')
       .select('*, teams(id, name), squads(id, published, published_at, squad_members(player_id))')
       .eq('team_id', selectedTeamId).order('match_date', { ascending: true })
-    if (data) setFixtures(data)
+    if (!data) return
+    setFixtures(data)
+
+    const fixtureIds = data.map(f => f.id)
+    const [{ data: avail }, { data: members }] = await Promise.all([
+      fixtureIds.length
+        ? supabase.from('availability').select('fixture_id, status').in('fixture_id', fixtureIds)
+        : Promise.resolve({ data: [] }),
+      supabase.from('team_members').select('team_id').eq('team_id', selectedTeamId).eq('status', 'active'),
+    ])
+
+    const ac = {}
+    avail?.forEach(a => {
+      if (!ac[a.fixture_id]) ac[a.fixture_id] = { available: 0, tentative: 0, unavailable: 0 }
+      if (ac[a.fixture_id][a.status] !== undefined) ac[a.fixture_id][a.status]++
+    })
+    setAvailCounts(ac)
+
+    const mc = {}
+    members?.forEach(m => { mc[m.team_id] = (mc[m.team_id] || 0) + 1 })
+    setMemberCounts(mc)
   }
 
   const handleEdit = (fixture) => {
@@ -105,7 +149,7 @@ export default function CaptainFixturesScreen({ navigation }) {
   }
 
   const handleDelete = (fixture) => {
-    if (fixture.squads?.[0]?.published) { Alert.alert('Cannot Delete', 'Squad has been published. Unpublish it first.'); return }
+    if (fixture.squads?.published) { Alert.alert('Cannot Delete', 'Squad has been published. Unpublish it first.'); return }
     Alert.alert('Delete Fixture', `Delete vs ${fixture.opponent}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
@@ -225,8 +269,73 @@ export default function CaptainFixturesScreen({ navigation }) {
             <Text style={styles.emptyText}>Tap "+ Add" to schedule your first match</Text>
           </View>
         ) : (
-          fixtures.map(fixture => {
-            const squad       = fixture.squads?.[0] || null
+          <>
+          {/* ── Archive toggle ── */}
+          {pastFixtures.length > 0 && (
+            <TouchableOpacity style={styles.archiveToggle} onPress={() => setShowArchive(v => !v)} activeOpacity={0.8}>
+              <View style={styles.archiveToggleLeft}>
+                <Text style={styles.archiveToggleIcon}>🗄</Text>
+                <View>
+                  <Text style={styles.archiveToggleTitle}>Past Fixtures Archive</Text>
+                  <Text style={styles.archiveToggleSub}>{pastFixtures.length} completed fixture{pastFixtures.length !== 1 ? 's' : ''}</Text>
+                </View>
+              </View>
+              <Text style={styles.archiveToggleArrow}>{showArchive ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* ── Archive list ── */}
+          {showArchive && pastFixtures.length > 0 && (
+            <View style={styles.archiveSection}>
+              {[...pastFixtures].sort((a,b) => b.match_date.localeCompare(a.match_date)).map(fixture => {
+                const isPublished = fixture.squads?.published || false
+                return (
+                  <View key={fixture.id} style={[styles.fixtureCard, styles.archiveCard]}>
+                    <View style={styles.fixtureTop}>
+                      <View style={styles.dateBlock}>
+                        <Text style={[styles.dateNum, { color: colors.textMuted }]}>{format(parseISO(fixture.match_date), 'dd')}</Text>
+                        <Text style={styles.dateDow}>{format(parseISO(fixture.match_date), 'EEE').toUpperCase()}</Text>
+                        <Text style={styles.dateMon}>{format(parseISO(fixture.match_date), 'MMM').toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.fixtureInfo}>
+                        <View style={styles.tagRow}>
+                          <View style={styles.pastBadge}><Text style={styles.pastBadgeText}>PLAYED</Text></View>
+                          <Text style={styles.matchTypeText}>{MATCH_TYPE_LABELS[fixture.match_type] || fixture.match_type}</Text>
+                        </View>
+                        <Text style={styles.fixtureTitle}>HTCC <Text style={styles.vsText}>vs</Text> {fixture.opponent?.toUpperCase()}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <AppIcon name="date" size={11} tint={colors.textLight} />
+                          <Text style={styles.fixtureMeta}>{format(parseISO(fixture.match_date), 'EEE d MMM yyyy')}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity style={styles.squadBtn}
+                        onPress={() => navigation.navigate(SCREENS.SQUAD_SELECTION, { fixtureId: fixture.id })}
+                        activeOpacity={0.8}>
+                        <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Select Squad'}</Text>
+                      </TouchableOpacity>
+                      {isPublished ? (
+                        <TouchableOpacity style={styles.scorecardBtn}
+                          onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
+                          activeOpacity={0.8}>
+                          <Text style={styles.scorecardBtnText}>Submit Scores</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
+                          <AppIcon name="edit" size={14} tint={colors.gold} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          )}
+
+          {/* ── Upcoming fixtures ── */}
+          {upcomingFixtures.map(fixture => {
+            const squad       = fixture.squads || null
             const isPublished = squad?.published || false
             const squadCount  = squad?.squad_members?.length || 0
 
@@ -279,6 +388,32 @@ export default function CaptainFixturesScreen({ navigation }) {
                   </View>
                 </View>
 
+                {/* Availability strip */}
+                {(() => {
+                  const ac      = availCounts[fixture.id] || {}
+                  const avail   = ac.available   || 0
+                  const tent    = ac.tentative   || 0
+                  const unavail = ac.unavailable || 0
+                  const total   = memberCounts[fixture.team_id] || 0
+                  const noReply = Math.max(0, total - avail - tent - unavail)
+                  if (!total) return null
+                  return (
+                    <View style={styles.availSection}>
+                      <View style={styles.availCountRow}>
+                        {avail   > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:colors.green}]}/><Text style={[styles.availCount,{color:colors.green}]}>{avail}</Text><Text style={styles.availLabel}>Available</Text></View>}
+                        {tent    > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:'#F97316'}]}/><Text style={[styles.availCount,{color:'#F97316'}]}>{tent}</Text><Text style={styles.availLabel}>Tentative</Text></View>}
+                        {unavail > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:colors.red}]}/><Text style={[styles.availCount,{color:colors.red}]}>{unavail}</Text><Text style={styles.availLabel}>No</Text></View>}
+                        {noReply > 0 && <View style={styles.availItem}><View style={[styles.availDot,{backgroundColor:'rgba(255,255,255,0.18)'}]}/><Text style={[styles.availCount,{color:colors.textMuted}]}>{noReply}</Text><Text style={styles.availLabel}>No reply</Text></View>}
+                      </View>
+                      <View style={styles.progressBar}>
+                        {avail   > 0 && <View style={{width:`${(avail/total)*100}%`,   backgroundColor:colors.green, height:'100%'}}/>}
+                        {tent    > 0 && <View style={{width:`${(tent/total)*100}%`,    backgroundColor:'#F97316',    height:'100%'}}/>}
+                        {unavail > 0 && <View style={{width:`${(unavail/total)*100}%`, backgroundColor:colors.red,   height:'100%'}}/>}
+                      </View>
+                    </View>
+                  )
+                })()}
+
                 {/* Actions */}
                 <View style={styles.actionRow}>
                   <TouchableOpacity style={styles.squadBtn}
@@ -286,27 +421,38 @@ export default function CaptainFixturesScreen({ navigation }) {
                     activeOpacity={0.8}>
                     <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Select Squad'}</Text>
                   </TouchableOpacity>
-                  {new Date(fixture.match_date) >= new Date() && (
-                    <TouchableOpacity style={styles.remindBtn}
-                      onPress={() => handleRemind(fixture)} disabled={reminding === fixture.id} activeOpacity={0.8}>
-                      {reminding === fixture.id
-                        ? <Text style={styles.remindBtnText}>…</Text>
-                        : <AppIcon name="alerts" size={14} tint="#60A5FA" />
-                      }
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
-                    <AppIcon name="edit" size={14} tint={colors.gold} />
-                  </TouchableOpacity>
-                  {!isPublished && (
-                    <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
-                      <AppIcon name="delete" size={14} tint={colors.red} />
-                    </TouchableOpacity>
+                  {isPublished ? (
+                    <>
+                      <TouchableOpacity style={styles.scorecardBtn}
+                        onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
+                        activeOpacity={0.8}>
+                        <Text style={styles.scorecardBtnText}>Submit Scores</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      {new Date(fixture.match_date) >= new Date() && (
+                        <TouchableOpacity style={styles.remindBtn}
+                          onPress={() => handleRemind(fixture)} disabled={reminding === fixture.id} activeOpacity={0.8}>
+                          {reminding === fixture.id
+                            ? <Text style={styles.remindBtnText}>…</Text>
+                            : <AppIcon name="alerts" size={14} tint="#60A5FA" />
+                          }
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
+                        <AppIcon name="edit" size={14} tint={colors.gold} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(fixture)} activeOpacity={0.8}>
+                        <AppIcon name="delete" size={14} tint={colors.red} />
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </View>
             )
-          })
+          })}
+          </>
         )}
       </ScrollView>
 
@@ -414,15 +560,37 @@ const styles = StyleSheet.create({
   fixtureTitle:    { fontFamily: fonts.bold, fontSize: 15, color: colors.white, marginBottom: 3 },
   vsText:          { fontFamily: fonts.display, fontSize: 15, color: colors.gold },
   fixtureMeta:     { fontFamily: fonts.bold, fontSize: 11, color: colors.textLight, marginBottom: 2 },
+  // ── Availability strip ────────────────────────────────────────────────────
+  availSection:   { paddingHorizontal: spacing.sm, paddingBottom: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.04)' },
+  availCountRow:  { flexDirection: 'row', gap: 10, flexWrap: 'wrap', paddingTop: 8, paddingBottom: 6 },
+  availItem:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  availDot:       { width: 7, height: 7, borderRadius: 4 },
+  availCount:     { fontFamily: fonts.bold, fontSize: 11 },
+  availLabel:     { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  progressBar:    { height: 3, backgroundColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', overflow: 'hidden', borderRadius: 2 },
+
   actionRow:       { flexDirection: 'row', gap: 6, padding: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   squadBtn:        { flex: 2, backgroundColor: colors.gold, borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   squadBtnText:    { fontFamily: fonts.bold, fontSize: 12, color: colors.navy },
+  scorecardBtn:    { flex: 2, backgroundColor: 'rgba(245,197,24,0.12)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.35)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+  scorecardBtnText:{ fontFamily: fonts.bold, fontSize: 12, color: colors.gold },
   remindBtn:       { flex: 1, backgroundColor: 'rgba(96,165,250,0.1)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.25)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   remindBtnText:   { fontFamily: fonts.bold, fontSize: 14, color: '#60A5FA' },
   editBtn:         { flex: 1, backgroundColor: 'rgba(245,197,24,0.08)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.25)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   editBtnText:     { fontFamily: fonts.bold, fontSize: 12, color: colors.gold },
   deleteBtn:       { flex: 1, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
   deleteBtnText:   { fontFamily: fonts.bold, fontSize: 12, color: colors.red },
+
+  archiveToggle:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(139,155,180,0.06)', borderWidth: 1, borderColor: 'rgba(139,155,180,0.2)', borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  archiveToggleLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  archiveToggleIcon:  { fontSize: 20 },
+  archiveToggleTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.textLight, marginBottom: 2 },
+  archiveToggleSub:   { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  archiveToggleArrow: { fontFamily: fonts.bold, fontSize: 14, color: colors.textMuted },
+  archiveSection:     { marginBottom: spacing.lg },
+  archiveCard:        { opacity: 0.7 },
+  pastBadge:          { backgroundColor: 'rgba(139,155,180,0.1)', borderWidth: 1, borderColor: 'rgba(139,155,180,0.2)', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
+  pastBadgeText:      { fontFamily: fonts.bold, fontSize: 10, color: colors.textMuted },
 
   modalBackdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet:      { backgroundColor: colors.navyLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: 'rgba(34,197,94,0.15)', padding: spacing.lg, paddingBottom: 40 },

@@ -17,7 +17,8 @@ import { colors, fonts, spacing, radius } from '../../theme'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
-const ALL = 'all'
+const ALL       = 'all'
+const MY_TEAMS  = 'my_teams'
 
 // Returns YYYY-MM-DD using local date parts — avoids UTC/BST off-by-one
 function toLocalISO(d) {
@@ -75,14 +76,15 @@ function formatDay(dateStr) {
   return { day: d.getDate(), dow: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] }
 }
 
-export default function FixturesScreen({ navigation }) {
+export default function FixturesScreen({ navigation, route }) {
   const { profile } = useAuthStore()
 
-  const [fixtures,     setFixtures]     = useState([])
-  const [availability, setAvailability] = useState({})
-  const [squads,       setSquads]       = useState({})
-  const [myTeams,      setMyTeams]      = useState([])
-  const [loading,      setLoading]      = useState(true)
+  const [fixtures,         setFixtures]         = useState([])
+  const [availability,     setAvailability]     = useState({})
+  const [squads,           setSquads]           = useState({})
+  const [myTeams,          setMyTeams]          = useState([])
+  const [allTeamsForFilter,setAllTeamsForFilter] = useState([])
+  const [loading,          setLoading]          = useState(true)
 
   // ── Training state ─────────────────────────────────────────────────────────
   const [trainingSessions,   setTrainingSessions]   = useState([])
@@ -92,7 +94,7 @@ export default function FixturesScreen({ navigation }) {
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const [periodFilter,   setPeriodFilter]   = useState('upcoming')
-  const [teamFilter,     setTeamFilter]     = useState(ALL)
+  const [teamFilter,     setTeamFilter]     = useState(MY_TEAMS)
   const [homeAwayFilter, setHomeAwayFilter] = useState(ALL)
   const [typeFilter,     setTypeFilter]     = useState(ALL)
   const [filterModalOpen, setFilterModalOpen] = useState(false)
@@ -102,6 +104,17 @@ export default function FixturesScreen({ navigation }) {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start()
   }, [])
+
+  // ── Open training modal when navigated from notification ──────────────────
+  useEffect(() => {
+    const openSessionId = route?.params?.openSessionId
+    if (!openSessionId || trainingSessions.length === 0) return
+    const session = trainingSessions.find(s => s.id === openSessionId)
+    if (session) {
+      setTrainingModal(session)
+      navigation.setParams({ openSessionId: undefined })
+    }
+  }, [route?.params?.openSessionId, trainingSessions])
 
   // Re-fetch every time the screen is focused — ensures deletes/edits from
   // admin screens are immediately reflected without needing a full app reload
@@ -128,12 +141,15 @@ export default function FixturesScreen({ navigation }) {
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchUpcomingTraining()])
-    setLoading(false)
+    try {
+      await Promise.all([fetchFixtures(), fetchMyAvailability(), fetchUpcomingTraining()])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchUpcomingTraining = async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalISO(new Date())
     const { data: sessions } = await supabase
       .from('training_sessions')
       .select('*')
@@ -184,38 +200,44 @@ export default function FixturesScreen({ navigation }) {
   }
 
   const fetchFixtures = async () => {
+    const TEAM_ORDER = ['1st XI', '2nd XI', '3rd XI', '4th XI', 'Sunday XI']
+
+    // Fetch user's active team memberships
     const { data: teamRows } = await supabase
       .from('team_members')
       .select('team_id, teams(id, name)')
       .eq('player_id', profile.id)
       .eq('status', 'active')
 
-    const teamIds = teamRows?.map(t => t.team_id) || []
-    const TEAM_ORDER = ['1st XI', '2nd XI', '3rd XI', '4th XI', 'Sunday XI']
-    setMyTeams(
-      (teamRows?.map(t => t.teams).filter(Boolean) || [])
-        .sort((a, b) => {
-          const ai = TEAM_ORDER.indexOf(a.name)
-          const bi = TEAM_ORDER.indexOf(b.name)
-          const av = ai === -1 ? 999 : ai
-          const bv = bi === -1 ? 999 : bi
-          return av - bv
-        })
-    )
-    if (teamIds.length === 0) { setFixtures([]); return }
+    const myTeamArr = (teamRows?.map(t => t.teams).filter(Boolean) || [])
+      .sort((a, b) => {
+        const ai = TEAM_ORDER.indexOf(a.name), bi = TEAM_ORDER.indexOf(b.name)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+    setMyTeams(myTeamArr)
 
-    const { data, error } = await supabase
+    // Fetch ALL fixtures — members can view any team's fixtures
+    const { data: allFixtures } = await supabase
       .from('fixtures')
       .select('*, teams(id, name), squads(id, published)')
-      .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (!error && data) {
-      setFixtures(data)
-      const sq = {}
-      data.forEach(f => { sq[f.id] = f.squads?.[0]?.published || false })
-      setSquads(sq)
-    }
+    const unique = allFixtures || []
+    setFixtures(unique)
+
+    const sq = {}
+    unique.forEach(f => { sq[f.id] = f.squads?.published || false })
+    setSquads(sq)
+
+    // Build sorted unique teams list for filter modal
+    const teamsMap = {}
+    unique.forEach(f => { if (f.teams) teamsMap[f.teams.id] = f.teams })
+    setAllTeamsForFilter(
+      Object.values(teamsMap).sort((a, b) => {
+        const ai = TEAM_ORDER.indexOf(a.name), bi = TEAM_ORDER.indexOf(b.name)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+    )
   }
 
   const fetchMyAvailability = async () => {
@@ -233,30 +255,39 @@ export default function FixturesScreen({ navigation }) {
   // ── Cache this Monday's ISO date — avoids creating new Date on every isPast() call ──
   const thisMondayISO = useMemo(() => getThisMondayISO(), [])
 
+  // ── Own team IDs — O(1) lookup for availability gating ────────────────────
+  const myTeamIdsSet = useMemo(() => new Set(myTeams.map(t => t.id)), [myTeams])
+
   // ── Filtered fixtures ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return fixtures.filter(f => {
       const past = f.match_date < thisMondayISO
-      if (periodFilter   === 'upcoming' && past)  return false
-      if (periodFilter   === 'past'     && !past) return false
-      if (teamFilter     !== ALL && f.team_id    !== teamFilter)     return false
+      if (periodFilter === 'upcoming' && past)  return false
+      if (periodFilter === 'past'     && !past) return false
+      // MY_TEAMS (default): own teams + all friendlies
+      if (teamFilter === MY_TEAMS && !myTeamIdsSet.has(f.team_id) && f.match_type !== 'friendly') return false
+      // Specific team filter
+      if (teamFilter !== ALL && teamFilter !== MY_TEAMS && f.team_id !== teamFilter) return false
       if (homeAwayFilter !== ALL && f.home_away  !== homeAwayFilter) return false
       if (typeFilter     !== ALL && f.match_type !== typeFilter)     return false
       return true
     })
-  }, [fixtures, periodFilter, teamFilter, homeAwayFilter, typeFilter, thisMondayISO])
+  }, [fixtures, periodFilter, teamFilter, homeAwayFilter, typeFilter, thisMondayISO, myTeamIdsSet])
 
-  // ── Stats — memoised to avoid recalculation on every render ───────────────
-  const { totalUpcoming, totalPast, totalResponded, totalAvailable } = useMemo(() => ({
-    totalUpcoming:  fixtures.filter(f => f.match_date >= thisMondayISO).length,
-    totalPast:      fixtures.filter(f => f.match_date <  thisMondayISO).length,
-    totalResponded: Object.keys(availability).length,
-    totalAvailable: Object.values(availability).filter(s => s === 'available').length,
-  }), [fixtures, availability, thisMondayISO])
+  // ── Stats — based on own-team fixtures only ────────────────────────────────
+  const { totalUpcoming, totalPast, totalResponded, totalAvailable } = useMemo(() => {
+    const ownFixtures = fixtures.filter(f => myTeamIdsSet.has(f.team_id) || f.match_type === 'friendly')
+    return {
+      totalUpcoming:  ownFixtures.filter(f => f.match_date >= thisMondayISO).length,
+      totalPast:      ownFixtures.filter(f => f.match_date <  thisMondayISO).length,
+      totalResponded: Object.keys(availability).length,
+      totalAvailable: Object.values(availability).filter(s => s === 'available').length,
+    }
+  }, [fixtures, availability, thisMondayISO, myTeamIdsSet])
 
-  const hasFilters = teamFilter !== ALL || homeAwayFilter !== ALL || typeFilter !== ALL
+  const hasFilters = teamFilter !== MY_TEAMS || homeAwayFilter !== ALL || typeFilter !== ALL
   const activeFilterCount = [
-    teamFilter     !== ALL,
+    teamFilter     !== MY_TEAMS,
     homeAwayFilter !== ALL,
     typeFilter     !== ALL,
   ].filter(Boolean).length
@@ -500,7 +531,7 @@ export default function FixturesScreen({ navigation }) {
             {/* Clear */}
             {hasFilters && (
               <TouchableOpacity
-                onPress={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
+                onPress={() => { setTeamFilter(MY_TEAMS); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
                 style={styles.clearBtn}
                 activeOpacity={0.7}
               >
@@ -527,7 +558,7 @@ export default function FixturesScreen({ navigation }) {
                   <Text style={styles.modalTitle}>FILTERS</Text>
                   {hasFilters && (
                     <TouchableOpacity
-                      onPress={() => { setTeamFilter(ALL); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
+                      onPress={() => { setTeamFilter(MY_TEAMS); setHomeAwayFilter(ALL); setTypeFilter(ALL) }}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.modalClearText}>Clear all</Text>
@@ -563,7 +594,11 @@ export default function FixturesScreen({ navigation }) {
                   {/* Column 2: Teams */}
                   <View style={styles.modalColumn}>
                     <Text style={styles.modalColTitle}>TEAM</Text>
-                    {[{ id: ALL, name: 'ALL' }, ...myTeams].map(t => (
+                    {[
+                      { id: MY_TEAMS, name: 'MY TEAMS' },
+                      { id: ALL,      name: 'ALL' },
+                      ...allTeamsForFilter,
+                    ].map(t => (
                       <TouchableOpacity
                         key={t.id}
                         onPress={() => setTeamFilter(t.id)}
@@ -650,11 +685,12 @@ export default function FixturesScreen({ navigation }) {
                 const isPublished = squads[fixture.id] || false
                 const cfg         = myStatus ? AVAILABILITY_CONFIG[myStatus] : null
                 const { day, dow }= formatDay(fixture.match_date)
+                const canAvail    = myTeamIdsSet.has(fixture.team_id) || fixture.match_type === 'friendly'
 
                 return (
                   <TouchableOpacity
                     key={fixture.id}
-                    onPress={() => navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: fixture.id })}
+                    onPress={() => navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: fixture.id, readOnly: !canAvail })}
                     activeOpacity={0.75}
                     style={[
                       styles.fixtureRow,
@@ -714,7 +750,7 @@ export default function FixturesScreen({ navigation }) {
 
                     {/* Availability dot + arrow */}
                     <View style={styles.availBadgeWrap}>
-                      {cfg ? (
+                      {canAvail && (cfg ? (
                         <View style={[styles.availDotOnly, { backgroundColor: cfg.fillColor, borderColor: `${cfg.color}55` }]}>
                           <View style={[styles.availDotOnlyInner, { backgroundColor: cfg.color, shadowColor: cfg.color }]} />
                         </View>
@@ -722,7 +758,7 @@ export default function FixturesScreen({ navigation }) {
                         <View style={styles.availDotOnly}>
                           <View style={styles.availDotOnlySilver} />
                         </View>
-                      ) : null}
+                      ) : null)}
                       <Text style={styles.viewDetails}>›</Text>
                     </View>
                   </TouchableOpacity>

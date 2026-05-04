@@ -2,15 +2,16 @@
 // Shows fixture info, availability toggle (upcoming), squad (upcoming),
 // result banner + POTM card + full scorecard (past fixtures with results)
 
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Animated, Easing, Modal,
+  StyleSheet, ActivityIndicator, Animated, Easing, Modal, Linking, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
 import { supabase }     from '../../lib/supabase'
 import useAuthStore     from '../../store/authStore'
-import { AVAILABILITY_CONFIG, MATCH_TYPE_LABELS, teamColor } from '../../lib/constants'
+import { AVAILABILITY_CONFIG, MATCH_TYPE_LABELS, teamColor, toTitleCase } from '../../lib/constants'
 import { colors, fonts, spacing, radius } from '../../theme'
 import AppIcon from '../../components/AppIcon'
 
@@ -51,6 +52,10 @@ function calculatePoints(bat, bowl, field) {
     if (runs >= 100) pts += 40 + 20 + 10
     else if (runs >= 50) pts += 20 + 10
     else if (runs >= 25) pts += 10
+    // Duck penalty — dismissed for 0
+    if (runs === 0 && !bat.not_out && ((bat.balls || 0) > 0 || bat.run_out)) pts -= 5
+    // Run out penalty — additional deduction
+    if (bat.run_out && !bat.not_out) pts -= 8
   }
   if (bowl && (bowl.overs > 0 || bowl.wickets > 0)) {
     const wickets = bowl.wickets || 0
@@ -71,9 +76,9 @@ function calculatePoints(bat, bowl, field) {
   }
   if (field) {
     pts += (field.catches   || 0) * 10
-    pts += (field.stumpings || 0) * 15
+    pts += (field.stumpings || 0) * 10
   }
-  return Math.max(0, pts)
+  return pts
 }
 
 // ─── Build performance stat lines per player ───────────────────────────────────
@@ -82,20 +87,24 @@ function calculatePoints(bat, bowl, field) {
 function buildStatLines(bat, bowl, field) {
   const lines = []
 
-  // Batting — shown if player has a record (even 0 is valid DNB)
+  // Batting — DND if no contribution recorded (all zeros, not not-out)
   if (bat) {
     const runs  = bat.runs  || 0
     const balls = bat.balls || 0
     const fours = bat.fours || 0
     const sixes = bat.sixes || 0
-    const sr    = balls > 0 ? ((runs / balls) * 100).toFixed(1) : null
-    let v = `${runs}r`
-    if (balls > 0) v += ` (${balls}b)`
-    if (fours > 0) v += ` · ${fours}×4`
-    if (sixes > 0) v += ` · ${sixes}×6`
-    if (sr)        v += ` · SR ${sr}`
-    if (bat.not_out) v += ' *'
-    lines.push({ label: 'Bat', value: v, color: colors.gold })
+    const didNotBat = runs === 0 && balls === 0 && fours === 0 && sixes === 0 && !bat.not_out
+    if (didNotBat) {
+      lines.push({ label: 'Bat', value: 'DNB', color: colors.gold })
+    } else {
+      const sr       = balls > 0 ? ((runs / balls) * 100).toFixed(1) : null
+      const notOut   = bat.not_out ? '*' : ''
+      let v = balls > 0 ? `${runs}${notOut}(${balls})` : `${runs}${notOut}`
+      if (fours > 0) v += ` · ${fours}×4`
+      if (sixes > 0) v += ` · ${sixes}×6`
+      if (sr)        v += ` · SR ${sr}`
+      lines.push({ label: 'Bat', value: v, color: colors.gold })
+    }
   }
 
   // Bowling — only if overs > 0
@@ -140,29 +149,31 @@ function getResultCfg(winner, opponent) {
 // ─── Points breakdown reference (shown in modal) ───────────────────────────────
 const POINTS_REF = {
   batting: [
-    { action: 'Per run',          pts: '+1' },
-    { action: 'Per four (bonus)', pts: '+2' },
-    { action: 'Per six (bonus)',  pts: '+4' },
-    { action: 'Not out (≥30r)',   pts: '+5' },
-    { action: '25+ runs',         pts: '+10' },
-    { action: '50+ runs',         pts: '+20' },
-    { action: '100+ runs',        pts: '+40' },
+    { action: 'Per run',             pts: '+1' },
+    { action: 'Per four (bonus)',    pts: '+2' },
+    { action: 'Per six (bonus)',     pts: '+4' },
+    { action: 'Not out (≥30r)',      pts: '+5' },
+    { action: '25+ runs',            pts: '+10' },
+    { action: '50+ runs',            pts: '+20' },
+    { action: '100+ runs',           pts: '+40' },
+    { action: 'Duck (dismissed 0)',  pts: '−5' },
+    { action: 'Run out (batting)',   pts: '−8' },
   ],
   bowling: [
-    { action: 'Per wicket',       pts: '+25' },
-    { action: 'Per maiden',       pts: '+5' },
-    { action: '3+ wickets bonus', pts: '+10' },
-    { action: '5+ wickets bonus', pts: '+25' },
-    { action: 'Per wide',         pts: '−1' },
-    { action: 'Per no-ball',      pts: '−2' },
-    { action: 'Economy 7–8',      pts: '−2' },
-    { action: 'Economy 8–9',      pts: '−3' },
-    { action: 'Economy 9–10',     pts: '−5' },
-    { action: 'Economy ≥10',      pts: '−8' },
+    { action: 'Per wicket',          pts: '+25' },
+    { action: 'Per maiden',          pts: '+5' },
+    { action: '3+ wickets bonus',    pts: '+10' },
+    { action: '5+ wickets bonus',    pts: '+25' },
+    { action: 'Per wide',            pts: '−1' },
+    { action: 'Per no-ball',         pts: '−2' },
+    { action: 'Economy 7–8',         pts: '−2' },
+    { action: 'Economy 8–9',         pts: '−3' },
+    { action: 'Economy 9–10',        pts: '−5' },
+    { action: 'Economy ≥10',         pts: '−8' },
   ],
   fielding: [
-    { action: 'Per catch',        pts: '+10' },
-    { action: 'Per stumping',     pts: '+15' },
+    { action: 'Per catch',           pts: '+10' },
+    { action: 'Per stumping',        pts: '+10' },
   ],
 }
 
@@ -264,7 +275,7 @@ function POTMCard({ player, points, statLines }) {
 }
 
 // ─── Single player performance card ───────────────────────────────────────────
-function PlayerCard({ player, rank, statLines }) {
+function PlayerCard({ player, rank, statLines, pts }) {
   return (
     <View style={st.playerCard}>
       {/* Rank badge */}
@@ -273,8 +284,15 @@ function PlayerCard({ player, rank, statLines }) {
       </View>
 
       <View style={{ flex: 1 }}>
-        {/* Name row */}
-        <Text style={st.playerCardName} numberOfLines={1}>{player.full_name}</Text>
+        {/* Name row — name left, pts badge right */}
+        <View style={st.playerNameRow}>
+          <Text style={st.playerCardName} numberOfLines={1}>{player.full_name}</Text>
+          {pts !== undefined && (
+            <View style={st.ptsBadge}>
+              <Text style={st.ptsBadgeText}>{Math.round(pts)} pts</Text>
+            </View>
+          )}
+        </View>
 
         {/* Stat lines */}
         {statLines.length > 0 ? statLines.map((line, i) => (
@@ -292,7 +310,7 @@ function PlayerCard({ player, rank, statLines }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function FixtureDetailScreen({ route, navigation }) {
-  const { fixtureId } = route.params
+  const { fixtureId, readOnly = false } = route.params
   const { profile }   = useAuthStore()
 
   // ── Fixture + squad ─────────────────────────────────────────────────────────
@@ -313,17 +331,26 @@ export default function FixtureDetailScreen({ route, navigation }) {
   const [loading,      setLoading]      = useState(true)
   const [showPoints,   setShowPoints]   = useState(false)
 
-  useEffect(() => { if (profile?.id && fixtureId) loadAll() }, [profile?.id, fixtureId])
+  // useFocusEffect ensures re-fetch whenever screen gains focus (e.g. navigating
+  // back from MatchScorecardScreen after submitting a result).
+  useFocusEffect(
+    useCallback(() => {
+      if (profile?.id && fixtureId) loadAll()
+    }, [profile?.id, fixtureId])
+  )
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([
-      fetchFixture(),
-      fetchSquad(),
-      fetchMyAvailability(),
-      fetchResult(),
-    ])
-    setLoading(false)
+    try {
+      await Promise.all([
+        fetchFixture(),
+        fetchSquad(),
+        fetchMyAvailability(),
+        fetchResult(),
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchFixture = async () => {
@@ -371,7 +398,7 @@ export default function FixtureDetailScreen({ route, navigation }) {
     // Match result
     const { data: res } = await supabase
       .from('match_results')
-      .select('winner, submitted_at')
+      .select('winner, submitted_at, playcricket_url')
       .eq('fixture_id', fixtureId)
       .maybeSingle()
     if (!res) return
@@ -432,8 +459,8 @@ export default function FixtureDetailScreen({ route, navigation }) {
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const today        = toLocalISO(new Date())
-  const isPast       = fixture?.match_date < today
   const hasResult    = !!result
+  const isPast       = fixture?.match_date <= today || hasResult
   const isInSquad    = squadMembers.some(sm => sm.player_id === profile?.id)
   const captain      = squadMembers.find(sm => sm.is_captain)
   const wk           = squadMembers.find(sm => sm.is_wicketkeeper)
@@ -449,7 +476,7 @@ export default function FixtureDetailScreen({ route, navigation }) {
     return [...batData]
       .map(p => ({
         player_id:    p.player_id,
-        full_name:    p.profiles?.full_name || 'Unknown',
+        full_name:    toTitleCase(p.profiles?.full_name) || 'Unknown',
         avatar_color: p.profiles?.avatar_color || colors.gold,
         // Calculate points for sorting — same formula as MatchScorecardScreen
         _pts: calculatePoints(
@@ -551,7 +578,7 @@ export default function FixtureDetailScreen({ route, navigation }) {
 
             {/* POTM animated card */}
             {potm && (() => {
-              const potmProfile = { full_name: potm.profiles?.full_name, player_id: potm.player_id }
+              const potmProfile = { full_name: toTitleCase(potm.profiles?.full_name), player_id: potm.player_id }
               const potmStatLines = buildStatLines(batMap[potm.player_id], bowlMap[potm.player_id], fieldMap[potm.player_id])
               return (
                 <POTMCard
@@ -585,9 +612,32 @@ export default function FixtureDetailScreen({ route, navigation }) {
                   player={player}
                   rank={idx + 1}
                   statLines={statLines}
+                  pts={player._pts}
                 />
               )
             })}
+
+            {/* PlayCricket full scorecard link */}
+            {result?.playcricket_url ? (
+              <TouchableOpacity
+                style={st.playcricketBtn}
+                onPress={() => {
+                  // Extract first valid URL from field — admin may paste full result
+                  // text alongside the link (e.g. "Team A 120/5 https://...")
+                  const raw = result.playcricket_url.trim()
+                  const match = raw.match(/https?:\/\/\S+/)
+                  const url = match ? match[0] : `https://${raw}`
+                  Linking.openURL(url).catch(() =>
+                    Alert.alert('Cannot Open', 'Unable to open the PlayCricket link.')
+                  )
+                }}
+                activeOpacity={0.75}
+              >
+                <AppIcon name="send" size={14} tint={colors.gold} />
+                <Text style={st.playcricketBtnText}>View Full Scorecard on PlayCricket</Text>
+                <Text style={st.playcricketArrow}>›</Text>
+              </TouchableOpacity>
+            ) : null}
           </>
         ) : (
           <>
@@ -595,8 +645,8 @@ export default function FixtureDetailScreen({ route, navigation }) {
             {/* UPCOMING FIXTURE — availability + squad                         */}
             {/* ═══════════════════════════════════════════════════════════════ */}
 
-            {/* Availability — only show for upcoming fixtures */}
-            {!isPast && (
+            {/* Availability — upcoming fixtures, own-team members only */}
+            {!isPast && !readOnly && (
               <View style={st.card}>
                 <Text style={st.cardTitle}>My Availability</Text>
                 <View style={st.availButtons}>
@@ -664,13 +714,13 @@ export default function FixtureDetailScreen({ route, navigation }) {
                     {captain && (
                       <View style={st.roleSummaryItem}>
                         <AppIcon name="captainBadge" size={16} tint={colors.gold} />
-                        <Text style={st.roleSummaryName} numberOfLines={1}>{captain.profiles?.full_name}</Text>
+                        <Text style={st.roleSummaryName} numberOfLines={1}>{toTitleCase(captain.profiles?.full_name)}</Text>
                       </View>
                     )}
                     {wk && (
                       <View style={st.roleSummaryItem}>
                         <AppIcon name="wkBadge" size={16} tint="#60A5FA" />
-                        <Text style={st.roleSummaryName} numberOfLines={1}>{wk.profiles?.full_name}</Text>
+                        <Text style={st.roleSummaryName} numberOfLines={1}>{toTitleCase(wk.profiles?.full_name)}</Text>
                       </View>
                     )}
                   </View>
@@ -681,7 +731,7 @@ export default function FixtureDetailScreen({ route, navigation }) {
                 {squadMembers.map((sm, index) => {
                   const isMe  = sm.player_id === profile?.id
                   const color = sm.profiles?.avatar_color || colors.gold
-                  const name  = sm.profiles?.full_name || 'Unknown'
+                  const name  = toTitleCase(sm.profiles?.full_name) || 'Unknown'
                   return (
                     <View
                       key={sm.player_id}
@@ -850,6 +900,9 @@ const st = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  playerNameRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 },
+  ptsBadge:       { backgroundColor: 'rgba(245,197,24,0.1)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.25)', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2, flexShrink: 0 },
+  ptsBadgeText:   { fontFamily: fonts.bold, fontSize: 10, color: colors.gold, letterSpacing: 0.3 },
   rankBadge: {
     width: 26, height: 26,
     borderRadius: 13,
@@ -860,11 +913,37 @@ const st = StyleSheet.create({
     marginTop: 2,
   },
   rankText:         { fontFamily: fonts.bold, fontSize: 11, color: colors.textMuted },
-  playerCardName:   { fontFamily: fonts.bold, fontSize: 13, color: colors.white, marginBottom: 5 },
+  playerCardName:   { fontFamily: fonts.bold, fontSize: 13, color: colors.white, flex: 1, marginRight: 8 },
   statLine:         { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statLabel:        { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5, width: 34 },
   statValue:        { fontFamily: fonts.body, fontSize: 11, color: colors.textLight, flex: 1 },
   statNone:         { fontFamily: fonts.body, fontSize: 11, color: 'rgba(139,155,180,0.5)', marginTop: 2 },
+
+  // ── PlayCricket link ──
+  playcricketBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    backgroundColor: 'rgba(245,197,24,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.2)',
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  playcricketBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.gold,
+    flex: 1,
+  },
+  playcricketArrow: {
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    color: colors.gold,
+    lineHeight: 20,
+  },
 
   // ── Points modal ──
   modalBackdrop: {

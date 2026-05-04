@@ -12,11 +12,35 @@ import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
-import { SCREENS, MATCH_TYPE_LABELS } from '../../lib/constants'
+import { SCREENS, MATCH_TYPE_LABELS, toTitleCase, teamColor } from '../../lib/constants'
 import AppIcon from '../../components/AppIcon'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
-const FIXTURE_LIMIT = 6
+const FIXTURE_LIMIT = 8
+
+// ─── Local ISO date (BST-safe) — avoids UTC midnight date-shift ──────────────
+function toLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+// ─── Next Saturday helper ─────────────────────────────────────────────────────
+// Sunday 00:00–01:59 → still show last Saturday (cutoff = 2am)
+// Sunday 02:00+      → flip to following Saturday (reset window)
+function getNextSaturday() {
+  const now = new Date()
+  const day = now.getDay() // 0=Sun … 6=Sat
+  if (day === 0 && now.getHours() < 2) {
+    // Before 2am Sunday — return yesterday (last Saturday)
+    const sat = new Date(now)
+    sat.setDate(now.getDate() - 1)
+    return toLocalISO(sat)
+  }
+  // Saturday → skip to NEXT Saturday (not today)
+  const daysUntil = day === 6 ? 7 : (6 - day + 7) % 7 || 7
+  const sat = new Date(now)
+  sat.setDate(now.getDate() + daysUntil)
+  return toLocalISO(sat)
+}
 
 const AUDIENCE_META = {
   all:     { color: colors.gold,    label: 'All Members' },
@@ -28,7 +52,7 @@ const AUDIENCE_META = {
 export default function AdminDashboardScreen({ navigation }) {
   const profile = useAuthStore(s => s.profile)
 
-  const [stats,         setStats]         = useState({ members: 0, pending: 0, fixtures: 0, teams: 5 })
+  const [stats,         setStats]         = useState({ members: 0, pending: 0, available: 0, notSet: 0, availableSat: '' })
   const [pending,       setPending]       = useState([])
   const [joinRequests,  setJoinRequests]  = useState([])
   const [fixtures,      setFixtures]      = useState([])
@@ -51,6 +75,9 @@ export default function AdminDashboardScreen({ navigation }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'fixtures',
       }, () => { fetchFixtures(); fetchStats() })
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'availability',
+      }, () => fetchStats())
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
@@ -58,18 +85,49 @@ export default function AdminDashboardScreen({ navigation }) {
   const loadAll = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    await Promise.all([fetchStats(), fetchPending(), fetchJoinRequests(), fetchFixtures(), fetchAnnouncements()])
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      await Promise.all([fetchStats(), fetchPending(), fetchJoinRequests(), fetchFixtures(), fetchAnnouncements()])
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   const fetchStats = async () => {
-    const [members, pend, fix] = await Promise.all([
+    const nextSat = getNextSaturday()
+    const [members, pend, satFixtures] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact' }).neq('role', 'pending'),
       supabase.from('profiles').select('id', { count: 'exact' }).eq('role', 'pending'),
-      supabase.from('fixtures').select('id', { count: 'exact' }).gte('match_date', new Date().toISOString().split('T')[0]),
+      supabase.from('fixtures').select('id').eq('match_date', nextSat),
     ])
-    setStats({ members: members.count || 0, pending: pend.count || 0, fixtures: fix.count || 0, teams: 5 })
+
+    const totalMembers  = members.count || 0
+    const fixtureIds    = satFixtures.data?.map(f => f.id) || []
+
+    let available = 0
+    let notSet    = totalMembers   // default: nobody has responded
+
+    if (fixtureIds.length > 0) {
+      // Fetch all responses (any status) — one query covers both counts
+      const { data: avData } = await supabase
+        .from('availability').select('player_id, status')
+        .in('fixture_id', fixtureIds)
+
+      const respondedIds = new Set(avData?.map(r => r.player_id))
+      const availableIds = new Set(
+        avData?.filter(r => r.status === 'available').map(r => r.player_id)
+      )
+      available = availableIds.size
+      notSet    = Math.max(0, totalMembers - respondedIds.size)
+    }
+
+    setStats({
+      members:      totalMembers,
+      pending:      pend.count || 0,
+      available,
+      notSet,
+      availableSat: nextSat,
+    })
   }
 
   const fetchPending = async () => {
@@ -94,9 +152,22 @@ export default function AdminDashboardScreen({ navigation }) {
 
   const fetchFixtures = async () => {
     const { data } = await supabase.from('fixtures')
-      .select('*, teams(name)').gte('match_date', new Date().toISOString().split('T')[0])
-      .order('match_date', { ascending: true }).limit(FIXTURE_LIMIT)
-    if (data) setFixtures(data)
+      .select('*, teams(name)').gte('match_date', toLocalISO(new Date()))
+      .order('match_date', { ascending: true }).limit(FIXTURE_LIMIT * 4) // over-fetch to allow XI sort
+    if (!data) return
+    // Sort: date ASC (already), then 1XI → 2XI → 3XI → 4XI within same day
+    const xiRank = (name = '') => {
+      if (name.includes('1st')) return 0
+      if (name.includes('2nd')) return 1
+      if (name.includes('3rd')) return 2
+      if (name.includes('4th')) return 3
+      return 4
+    }
+    const sorted = [...data].sort((a, b) => {
+      if (a.match_date !== b.match_date) return a.match_date.localeCompare(b.match_date)
+      return xiRank(a.teams?.name) - xiRank(b.teams?.name)
+    })
+    setFixtures(sorted.slice(0, FIXTURE_LIMIT))
   }
 
   const fetchAnnouncements = async () => {
@@ -171,15 +242,26 @@ export default function AdminDashboardScreen({ navigation }) {
         {/* ── Stats 2×2 ── */}
         <View style={styles.statsGrid}>
           {[
-            { label: 'Active Members',    value: stats.members,  color: colors.green },
-            { label: 'Pending Approval',  value: stats.pending,  color: '#F97316', urgent: stats.pending > 0 },
-            { label: 'Upcoming Fixtures', value: stats.fixtures, color: colors.gold },
-            { label: 'Active Teams',      value: stats.teams,    color: colors.textMuted },
+            { label: 'Active Members',   value: stats.members,  color: colors.gold },
+            { label: 'Pending Approval', value: stats.pending,  color: '#F97316', urgent: stats.pending > 0 },
+            {
+              label: 'Not Set',
+              value: stats.notSet,
+              color: colors.textMuted,
+              sub: stats.availableSat ? format(parseISO(stats.availableSat), 'd MMM').toUpperCase() : '',
+            },
+            {
+              label: 'Available Saturday',
+              value: stats.available,
+              color: colors.green,
+              sub: stats.availableSat ? format(parseISO(stats.availableSat), 'd MMM').toUpperCase() : '',
+            },
           ].map(s => (
             <View key={s.label} style={[styles.statCard, s.urgent && styles.statCardUrgent]}>
               <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
               <Text style={styles.statLabel}>{s.label}</Text>
               {s.urgent && <Text style={styles.urgentBadge}>ACTION REQUIRED</Text>}
+              {s.sub ? <Text style={styles.statSub}>{s.sub}</Text> : null}
             </View>
           ))}
         </View>
@@ -196,7 +278,7 @@ export default function AdminDashboardScreen({ navigation }) {
                     <Text style={styles.avatarText}>{getInitials(member.full_name)}</Text>
                   </View>
                   <View>
-                    <Text style={styles.memberName}>{member.full_name}</Text>
+                    <Text style={styles.memberName}>{toTitleCase(member.full_name)}</Text>
                     <Text style={styles.memberSub}>{member.phone || 'No phone'}</Text>
                     <Text style={styles.memberSub}>Joined {format(parseISO(member.created_at), 'd MMM yyyy')}</Text>
                   </View>
@@ -261,15 +343,19 @@ export default function AdminDashboardScreen({ navigation }) {
                 <Text style={styles.seeAll}>+ Add →</Text>
               </TouchableOpacity>
             </View>
-            {fixtures.map(f => (
-              <View key={f.id} style={styles.fixtureRow}>
+            {fixtures.map(f => {
+              const tCol = teamColor(f.teams?.name)
+              return (
+              <View key={f.id} style={[styles.fixtureRow, { borderLeftColor: tCol, borderLeftWidth: 3 }]}>
                 <View style={styles.fixtureDateBlock}>
-                  <Text style={styles.fixtureDateNum}>{format(parseISO(f.match_date), 'dd')}</Text>
+                  <Text style={[styles.fixtureDateNum, { color: tCol }]}>{format(parseISO(f.match_date), 'dd')}</Text>
                   <Text style={styles.fixtureDateMon}>{format(parseISO(f.match_date), 'MMM')}</Text>
                 </View>
                 <View style={styles.fixtureInfo}>
                   <View style={styles.fixtureTagRow}>
-                    <View style={styles.teamBadge}><Text style={styles.teamBadgeText}>{f.teams?.name}</Text></View>
+                    <View style={[styles.teamBadge, { backgroundColor: tCol + '18', borderColor: tCol + '44' }]}>
+                      <Text style={[styles.teamBadgeText, { color: tCol }]}>{f.teams?.name}</Text>
+                    </View>
                     {(() => {
                       const hwCfg = f.home_away === 'home'
                         ? { icon: 'homeFixture', label: 'HOME', color: colors.green, bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.25)' }
@@ -293,7 +379,7 @@ export default function AdminDashboardScreen({ navigation }) {
                   </View>
                 </View>
               </View>
-            ))}
+            )})}
           </View>
         )}
 
@@ -321,7 +407,7 @@ export default function AdminDashboardScreen({ navigation }) {
                     <Text style={styles.annDate}>{format(parseISO(ann.created_at), 'd MMM')}</Text>
                   </View>
                   <Text style={styles.annTitle}>{ann.title}</Text>
-                  {ann.profiles?.full_name && <Text style={styles.annBy}>by {ann.profiles.full_name}</Text>}
+                  {ann.profiles?.full_name && <Text style={styles.annBy}>by {toTitleCase(ann.profiles.full_name)}</Text>}
                 </TouchableOpacity>
               )
             })}
@@ -351,6 +437,7 @@ const styles = StyleSheet.create({
   statCardUrgent: { borderColor: 'rgba(249,115,22,0.3)', backgroundColor: 'rgba(249,115,22,0.04)' },
   statValue:      { fontFamily: fonts.display, fontSize: 36, lineHeight: 40, letterSpacing: 1 },
   statLabel:      { fontFamily: fonts.bold, fontSize: 11, color: colors.textMuted, marginTop: 4 },
+  statSub:        { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted, marginTop: 2, opacity: 0.7 },
   urgentBadge:    { fontFamily: fonts.bold, fontSize: 9, color: '#F97316', letterSpacing: 1, marginTop: 4 },
 
   section:        { marginBottom: spacing.xl },

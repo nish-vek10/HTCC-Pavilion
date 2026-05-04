@@ -14,7 +14,13 @@ import useAuthStore      from '../../store/authStore'
 import TopHeader         from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
 import { SCREENS }       from '../../lib/constants'
+import { sendPushToRole, insertNotificationsForRole } from '../../lib/pushNotifications'
 import AppIcon           from '../../components/AppIcon'
+
+// Local ISO date (BST-safe) — avoids UTC midnight date-shift
+function toLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
 const EMPTY_FORM = {
@@ -69,15 +75,18 @@ export default function AdminTrainingScreen({ navigation, embedded = false }) {
   const loadSessions = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
-      .from('training_sessions')
-      .select('*')
-      .gte('session_date', today)
-      .order('session_date', { ascending: true })
-    if (data) setSessions(data)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const today = toLocalISO(new Date())
+      const { data } = await supabase
+        .from('training_sessions')
+        .select('*')
+        .gte('session_date', today)
+        .order('session_date', { ascending: true })
+      if (data) setSessions(data)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   // ── Open edit form pre-populated with session data ────────────────────────
@@ -110,7 +119,7 @@ export default function AdminTrainingScreen({ navigation, embedded = false }) {
       dates.push({
         title,
         venue,
-        session_date: current.toISOString().split('T')[0],
+        session_date: toLocalISO(current),
         session_time: time,
       })
       current = addWeeks(current, 1)
@@ -135,7 +144,7 @@ export default function AdminTrainingScreen({ navigation, embedded = false }) {
     try {
       if (!form.is_recurring) {
         // Single session
-        const { error: singleErr } = await supabase
+        const { data: newSession, error: singleErr } = await supabase
           .from('training_sessions')
           .insert({
             title:        form.title.trim(),
@@ -144,7 +153,13 @@ export default function AdminTrainingScreen({ navigation, embedded = false }) {
             session_time: form.session_time,
             created_by:   profile.id,
           })
+          .select().single()
         if (singleErr) throw singleErr
+        // Push notification to all members
+        const singleTitle = `Training: ${form.title.trim()}`
+        const singleBody  = `${format(parseISO(isoDate), 'EEE d MMM')} at ${form.session_time?.slice(0,5)} — ${form.venue.trim()}`
+        sendPushToRole('member', singleTitle, singleBody, { type: 'training_reminder', session_id: newSession.id })
+        insertNotificationsForRole('member', 'training_reminder', singleTitle, singleBody, { session_id: newSession.id })
       } else {
         // Recurring — create parent then children
         const { data: parent, error: parentErr } = await supabase
@@ -173,6 +188,11 @@ export default function AdminTrainingScreen({ navigation, embedded = false }) {
           const { error: childErr } = await supabase.from('training_sessions').insert(children)
           if (childErr) throw childErr
         }
+        // Push notification to all members for recurring series
+        const recurTitle = `Training: ${form.title.trim()}`
+        const recurBody  = `${format(parseISO(isoDate), 'EEE d MMM')} onwards at ${form.session_time?.slice(0,5)} — ${form.venue.trim()}`
+        sendPushToRole('member', recurTitle, recurBody, { type: 'training_reminder', session_id: parent.id })
+        insertNotificationsForRole('member', 'training_reminder', recurTitle, recurBody, { session_id: parent.id })
       }
 
       closeForm()

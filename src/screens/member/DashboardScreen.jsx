@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/authStore'
 import TopHeader from '../../components/layout/TopHeader'
-import { SCREENS, AVAILABILITY_CONFIG, MATCH_TYPE_LABELS, teamColor, shortTeam } from '../../lib/constants'
+import { SCREENS, AVAILABILITY_CONFIG, MATCH_TYPE_LABELS, teamColor, shortTeam, toTitleCase } from '../../lib/constants'
 import { colors, fonts, spacing, radius, shadow } from '../../theme'
 import AppIcon from '../../components/AppIcon'
 
@@ -341,8 +341,8 @@ export default function DashboardScreen({ navigation }) {
   const [annCarouselIdx,      setAnnCarouselIdx]      = useState(0)
   const [trainingSessions,    setTrainingSessions]    = useState([])
   const [trainingCarouselIdx, setTrainingCarouselIdx] = useState(0)
-  const [teamResults,         setTeamResults]         = useState([])  // one result per team, swipeable
-  const [resultCarouselIdx,   setResultCarouselIdx]   = useState(0)
+  const [latestResults,       setLatestResults]       = useState([])  // all-time results carousel
+  const [latestResultsIdx,    setLatestResultsIdx]    = useState(0)
   const [trainingAvail,    setTrainingAvail]    = useState({})
   const [trainingSubmitting, setTrainingSubmitting] = useState(null)
 
@@ -382,7 +382,7 @@ export default function DashboardScreen({ navigation }) {
 
   // ── Fetch upcoming training sessions ──────────────────────────────────
   const fetchTrainingSessions = async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalISO(new Date())
     const { data: sessions } = await supabase
       .from('training_sessions')
       .select('*')
@@ -404,47 +404,48 @@ export default function DashboardScreen({ navigation }) {
     }
   }
 
-  // ── Fetch most recent result per team — swipeable card per team ─────────────
-  // Queries last submitted result for each team separately, then fetches POTM.
-  // Canonical team order: 1st → 2nd → 3rd → 4th → Sunday
+  // ── Canonical team order ──────────────────────────────────────────────────
   const TEAM_ORDER = ['1st XI', '2nd XI', '3rd XI', '4th XI', 'Sunday XI']
 
-  const fetchLatestResult = async () => {
+  // ── Fetch ALL past results — permanent carousel, newest date first,
+  //    canonical team order within same date (1st → 2nd → 3rd → 4th → Sunday)
+  const fetchLatestResults = async () => {
     try {
-      // 1. Fetch all recent results (up to 20) with fixture + team info
       const { data: results } = await supabase
         .from('match_results')
         .select('winner, submitted_at, fixture_id, fixtures!fixture_id(id, opponent, match_date, match_type, teams!team_id(name))')
         .order('submitted_at', { ascending: false })
-        .limit(20)
+        .limit(30)
 
-      if (!results?.length) return
+      if (!results?.length) { setLatestResults([]); return }
 
-      // 2. Keep only the most recent result per team
-      const latestPerTeam = {}
-      results.forEach(r => {
-        const tName = r.fixtures?.teams?.name
-        if (tName && !latestPerTeam[tName]) latestPerTeam[tName] = r
-      })
+      // Sort: newest match_date first; within same date → canonical team order
+      const sorted = [...results]
+        .filter(r => r.fixtures)
+        .sort((a, b) => {
+          const dA = a.fixtures?.match_date || ''
+          const dB = b.fixtures?.match_date || ''
+          if (dB !== dA) return dB.localeCompare(dA)
+          const idx = name => {
+            const i = TEAM_ORDER.findIndex(t => (name || '').includes(t.split(' ')[0]))
+            return i === -1 ? 99 : i
+          }
+          return idx(a.fixtures?.teams?.name) - idx(b.fixtures?.teams?.name)
+        })
 
-      // 3. For each team result, fetch its POTM row
-      const orderedResults = await Promise.all(
-        TEAM_ORDER
-          .filter(t => latestPerTeam[t])
-          .map(async t => {
-            const res = latestPerTeam[t]
-            const { data: potmRow } = await supabase
-              .from('match_potm')
-              .select('points, profiles!player_id(full_name)')
-              .eq('fixture_id', res.fixture_id)
-              .maybeSingle()
-            return { ...res, match_potm: potmRow }
-          })
-      )
+      // Batch fetch all POTM rows — single query instead of N+1
+      const fixtureIds = sorted.map(r => r.fixture_id)
+      const { data: potmRows } = await supabase
+        .from('match_potm')
+        .select('fixture_id, points, profiles!player_id(full_name)')
+        .in('fixture_id', fixtureIds)
+      const potmMap = {}
+      potmRows?.forEach(p => { potmMap[p.fixture_id] = p })
+      const withPotm = sorted.map(res => ({ ...res, match_potm: potmMap[res.fixture_id] || null }))
 
-      setTeamResults(orderedResults)
+      setLatestResults(withPotm)
     } catch (err) {
-      console.warn('[Dashboard] fetchLatestResult:', err.message)
+      console.warn('[Dashboard] fetchLatestResults:', err.message)
     }
   }
 
@@ -481,18 +482,28 @@ export default function DashboardScreen({ navigation }) {
   // ── Find first upcoming weekend that has fixtures for this player's teams ──
   // Scans up to 16 weeks ahead — sets weekOffset so the navigator starts there
   const findSmartOffset = async (teamIds) => {
-    if (!teamIds?.length) return 0
     const thisMonday = getThisMonday()
     for (let offset = 0; offset <= 16; offset++) {
       const { saturday, sunday } = getWeekDates(offset)
       // Skip fully past weekends (both days before this Monday)
       if (saturday < thisMonday && sunday < thisMonday) continue
-      const { data } = await supabase
+
+      // Include: player's team fixtures OR friendly fixtures (visible to all members)
+      let query = supabase
         .from('fixtures')
         .select('id')
-        .in('team_id', teamIds)
         .in('match_date', [saturday, sunday])
         .limit(1)
+
+      if (teamIds?.length > 0) {
+        // OR: team fixture OR friendly
+        query = query.or(`team_id.in.(${teamIds.join(',')}),match_type.eq.friendly`)
+      } else {
+        // No teams — only see friendlies
+        query = query.eq('match_type', 'friendly')
+      }
+
+      const { data } = await query
       if (data?.length > 0) return offset
     }
     return 0
@@ -500,42 +511,43 @@ export default function DashboardScreen({ navigation }) {
 
   const loadData = async () => {
     setLoading(true)
+    try {
+      // Step 1 — get team IDs first so we can scan for the smart offset
+      const { data: myTeams } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('player_id', profile.id)
+        .eq('status', 'active')
+      const teamIds = myTeams?.map(t => t.team_id) || []
+      setMemberTeamIds(teamIds)
 
-    // Step 1 — get team IDs first so we can scan for the smart offset
-    const { data: myTeams } = await supabase
-      .from('team_members')
-      .select('team_id')
-      .eq('player_id', profile.id)
-      .eq('status', 'active')
-    const teamIds = myTeams?.map(t => t.team_id) || []
-    setMemberTeamIds(teamIds)
+      // Step 2 — find first upcoming weekend with fixtures and jump straight there
+      const smartOffset = await findSmartOffset(teamIds)
+      if (smartOffset !== weekOffset) {
+        setWeekOffset(smartOffset)
+        // useEffect([weekOffset]) will call fetchFixtures automatically — skip it in Promise.all
+        // to prevent the double network call that was occurring on every initial mount
+      }
 
-    // Step 2 — find first upcoming weekend with fixtures and jump straight there
-    const smartOffset = await findSmartOffset(teamIds)
-    if (smartOffset !== weekOffset) {
-      setWeekOffset(smartOffset)
-      // useEffect([weekOffset]) will call fetchFixtures automatically — skip it in Promise.all
-      // to prevent the double network call that was occurring on every initial mount
+      // Step 3 — load everything else in parallel
+      // fetchFixtures only runs here when the offset didn't change (offset change is handled by useEffect)
+      await Promise.all([
+        smartOffset === weekOffset ? fetchFixtures(smartOffset) : Promise.resolve(),
+        fetchMyAvailability(),
+        fetchAnnouncements(),
+        fetchAllTeams(),
+        fetchJoinRequests(),
+        fetchTrainingSessions(),
+        fetchLatestResults(),
+      ])
+    } finally {
+      setLoading(false)
     }
-
-    // Step 3 — load everything else in parallel
-    // fetchFixtures only runs here when the offset didn't change (offset change is handled by useEffect)
-    await Promise.all([
-      smartOffset === weekOffset ? fetchFixtures(smartOffset) : Promise.resolve(),
-      fetchMyAvailability(),
-      fetchAnnouncements(),
-      fetchAllTeams(),
-      fetchJoinRequests(),
-      fetchTrainingSessions(),
-      fetchLatestResult(),
-    ])
-    setLoading(false)
   }
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    await loadData()
-    setRefreshing(false)
+    try { await loadData() } finally { setRefreshing(false) }
   }
 
   // ── Fetch fixtures for current week ───────────────────────────────────────
@@ -552,17 +564,31 @@ export default function DashboardScreen({ navigation }) {
     const teamIds = myTeams?.map(t => t.team_id) || []
     setMemberTeamIds(teamIds)
 
-    if (teamIds.length === 0) { setFixtures([]); return }
-
-    // Step 2: fetch fixtures for those teams on Sat + Sun
-    const { data, error } = await supabase
+    // Step 2: friendly fixtures — ALL members can see + add availability
+    const { data: friendlyData } = await supabase
       .from('fixtures')
       .select('*, teams(id, name, day_type)')
-      .in('team_id', teamIds)
+      .eq('match_type', 'friendly')
       .in('match_date', [saturday, sunday])
       .order('match_date', { ascending: true })
 
-    if (!error && data) setFixtures(data)
+    // Step 3: MCCL / Cup / CVSL — only members of that specific team
+    let teamData = []
+    if (teamIds.length > 0) {
+      const { data } = await supabase
+        .from('fixtures')
+        .select('*, teams(id, name, day_type)')
+        .in('team_id', teamIds)
+        .neq('match_type', 'friendly')
+        .in('match_date', [saturday, sunday])
+        .order('match_date', { ascending: true })
+      teamData = data || []
+    }
+
+    // Step 4: merge + deduplicate (player in a team with a friendly = only one card)
+    const merged = [...(friendlyData || []), ...teamData]
+    const unique  = Array.from(new Map(merged.map(f => [f.id, f])).values())
+    setFixtures(unique)
   }
 
   const fetchMyAvailability = async () => {
@@ -759,42 +785,40 @@ const teamSortIndex = (name) => {
             <StatCard label="Upcoming"     value={fixtures.length}      sub="total fixtures" accent={colors.textMuted} />
           </View>
 
-          {/* ── Latest Result — per team, swipeable ── */}
-          {!loading && teamResults.length > 0 && (
+          {/* ── Latest Results — permanent horizontal carousel, newest first ── */}
+          {!loading && latestResults.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <View>
                   <Text style={styles.sectionLabel}>LAST MATCH</Text>
                   <Text style={styles.sectionTitle}>LATEST RESULTS</Text>
                 </View>
-                {teamResults.length > 1 && (
+                {latestResults.length > 1 && (
                   <Text style={styles.swipeHint}>Swipe for more ›</Text>
                 )}
               </View>
 
               <FlatList
-                data={teamResults}
-                keyExtractor={(r, i) => r.fixture_id || String(i)}
+                data={latestResults}
+                keyExtractor={r => r.fixture_id}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={e => {
                   const idx = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_W - spacing.md * 2))
-                  setResultCarouselIdx(Math.max(0, Math.min(idx, teamResults.length - 1)))
+                  setLatestResultsIdx(Math.max(0, Math.min(idx, latestResults.length - 1)))
                 }}
                 renderItem={({ item: res }) => {
-                  const fix     = res.fixtures
-                  const potm    = res.match_potm
-                  const winner  = res.winner
-                  const tc      = teamColor(fix?.teams?.name)
-                  const resCfg  = winner === 'htcc'
+                  const fix            = res.fixtures
+                  const potm           = res.match_potm
+                  const tc             = teamColor(fix?.teams?.name)
+                  const resCfg         = res.winner === 'htcc'
                     ? { label: 'WIN',       color: colors.green }
-                    : winner === 'opponent'
+                    : res.winner === 'opponent'
                     ? { label: 'LOSS',      color: '#EF4444' }
-                    : winner === 'draw'
+                    : res.winner === 'draw'
                     ? { label: 'DRAW',      color: colors.gold }
                     : { label: 'NO RESULT', color: colors.textMuted }
-                  // Match type label — always caps
                   const matchTypeLabel = MATCH_TYPE_LABELS[fix?.match_type] || (fix?.match_type || '').toUpperCase()
 
                   return (
@@ -804,30 +828,27 @@ const teamSortIndex = (name) => {
                         onPress={() => fix?.id && navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: fix.id })}
                         activeOpacity={0.8}
                       >
-                        {/* Team label + result + match type — all on one row */}
+                        {/* Team + opponent + WIN/LOSS badge */}
                         <View style={styles.latestResultTop}>
-                          {/* Team badge with canonical colour */}
                           <View style={[styles.latestResultTeamBadge, { backgroundColor: `${tc}18`, borderColor: `${tc}44` }]}>
                             <Text style={[styles.latestResultTeamText, { color: tc }]}>
                               {shortTeam(fix?.teams?.name) || fix?.teams?.name}
                             </Text>
                           </View>
-
-                          {/* Opponent */}
                           <Text style={styles.latestResultMatch} numberOfLines={1}>
                             vs {fix?.opponent?.toUpperCase()}
                           </Text>
-
-                          {/* Result badge */}
                           <View style={[styles.latestResultBadge, { backgroundColor: `${resCfg.color}18`, borderColor: `${resCfg.color}40` }]}>
                             <Text style={[styles.latestResultBadgeText, { color: resCfg.color }]}>{resCfg.label}</Text>
                           </View>
                         </View>
 
-                        {/* Date + match type — match type always CAPS */}
+                        {/* Date + match type */}
                         <View style={styles.latestResultMetaRow}>
                           <Text style={styles.latestResultMeta}>
-                            {fix?.match_date ? new Date(fix.match_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                            {fix?.match_date
+                              ? new Date(fix.match_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                              : ''}
                           </Text>
                           {matchTypeLabel ? (
                             <View style={styles.latestResultTypeBadge}>
@@ -840,70 +861,22 @@ const teamSortIndex = (name) => {
                         {potm?.profiles?.full_name && (
                           <View style={styles.latestResultPotm}>
                             <AppIcon name="trophy" size={20} />
-                            <Text style={styles.latestResultPotmName}>{potm.profiles.full_name}</Text>
+                            <Text style={styles.latestResultPotmName}>{toTitleCase(potm.profiles.full_name)}</Text>
                             <Text style={styles.latestResultPotmPts}>{Math.round(potm.points || 0)} pts</Text>
                           </View>
                         )}
 
-                        <Text style={styles.latestResultViewMore}>View scorecard  ›</Text>
+                        <Text style={styles.latestResultViewMore}>View scorecard ›</Text>
                       </TouchableOpacity>
                     </View>
                   )
                 }}
               />
 
-              {/* Carousel dots */}
-              {teamResults.length > 1 && (
+              {latestResults.length > 1 && (
                 <View style={styles.carouselDots}>
-                  {teamResults.map((r, i) => {
-                    const tc = teamColor(r.fixtures?.teams?.name)
-                    return (
-                      <View
-                        key={i}
-                        style={[
-                          styles.carouselDot,
-                          resultCarouselIdx === i && { ...styles.carouselDotActive, backgroundColor: tc },
-                        ]}
-                      />
-                    )
-                  })}
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* ── Announcements ── */}
-          {!loading && announcements.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeaderRow}>
-                <View>
-                  <Text style={styles.sectionLabel}>CLUB NEWS</Text>
-                  <Text style={styles.sectionTitle}>ANNOUNCEMENTS</Text>
-                </View>
-                {announcements.length > 1 && (
-                  <Text style={styles.swipeHint}>Swipe for more ›</Text>
-                )}
-              </View>
-              <FlatList
-                data={announcements}
-                keyExtractor={ann => ann.id}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={e => {
-                  const idx = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_W - spacing.md * 2))
-                  setAnnCarouselIdx(Math.max(0, Math.min(idx, announcements.length - 1)))
-                }}
-                renderItem={({ item: ann }) => (
-                  <View style={{ width: SCREEN_W - spacing.md * 2 }}>
-                    <AnnouncementCard ann={ann} />
-                  </View>
-                )}
-              />
-              {announcements.length > 1 && (
-                <View style={styles.carouselDots}>
-                  {announcements.map((_, i) => (
-                    <View key={i} style={[styles.carouselDot, annCarouselIdx === i && styles.carouselDotActive]} />
+                  {latestResults.map((_, i) => (
+                    <View key={i} style={[styles.carouselDot, latestResultsIdx === i && styles.carouselDotActive]} />
                   ))}
                 </View>
               )}
@@ -1189,6 +1162,44 @@ const teamSortIndex = (name) => {
                 </View>
               )}
             </>
+          )}
+
+          {/* ── Announcements — shown after weekend fixtures ── */}
+          {!loading && announcements.length > 0 && (
+            <View style={[styles.section, { marginTop: spacing.sm }]}>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={styles.sectionLabel}>CLUB NEWS</Text>
+                  <Text style={styles.sectionTitle}>ANNOUNCEMENTS</Text>
+                </View>
+                {announcements.length > 1 && (
+                  <Text style={styles.swipeHint}>Swipe for more ›</Text>
+                )}
+              </View>
+              <FlatList
+                data={announcements}
+                keyExtractor={ann => ann.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={e => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_W - spacing.md * 2))
+                  setAnnCarouselIdx(Math.max(0, Math.min(idx, announcements.length - 1)))
+                }}
+                renderItem={({ item: ann }) => (
+                  <View style={{ width: SCREEN_W - spacing.md * 2 }}>
+                    <AnnouncementCard ann={ann} />
+                  </View>
+                )}
+              />
+              {announcements.length > 1 && (
+                <View style={styles.carouselDots}>
+                  {announcements.map((_, i) => (
+                    <View key={i} style={[styles.carouselDot, annCarouselIdx === i && styles.carouselDotActive]} />
+                  ))}
+                </View>
+              )}
+            </View>
           )}
 
           {/* ── Join a Team section ── */}

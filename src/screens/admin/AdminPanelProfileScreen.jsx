@@ -8,6 +8,7 @@ import {
   StyleSheet, Alert,
 } from 'react-native'
 import { supabase }      from '../../lib/supabase'
+import { toTitleCase }  from '../../lib/constants'
 import useAuthStore      from '../../store/authStore'
 import TopHeader         from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
@@ -122,7 +123,7 @@ export default function AdminPanelProfileScreen({ navigation }) {
               <Text style={[styles.avatarText, { color: avatarColor }]}>{getInitials(fullName)}</Text>
             </View>
             <View style={styles.identity}>
-              <Text style={styles.identityName}>{profile?.full_name}</Text>
+              <Text style={styles.identityName}>{toTitleCase(profile?.full_name)}</Text>
               <View style={[styles.roleBadge, { backgroundColor: roleMeta.color + '18', borderColor: roleMeta.color + '33' }]}>
                 <View style={[styles.roleDot, { backgroundColor: roleMeta.color }]} />
                 <View>

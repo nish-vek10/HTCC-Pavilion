@@ -1,5 +1,6 @@
 // pavilion-app/src/navigation/CaptainNavigator.jsx
 // Captain panel navigator — fixtures, squad selection, profile
+// Profile accessed via TopHeader avatar (not a tab)
 
 import React from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -10,10 +11,10 @@ import { SCREENS }                    from '../lib/constants'
 import { colors, fonts }              from '../theme'
 import icons                          from '../lib/icons'
 
-import CaptainFixturesScreen   from '../screens/captain/CaptainFixturesScreen'
-import SquadSelectionScreen    from '../screens/captain/SquadSelectionScreen'
-import MatchScorecardScreen    from '../screens/admin/MatchScorecardScreen'
-import AdminPanelProfileScreen from '../screens/admin/AdminPanelProfileScreen'
+import CaptainFixturesScreen from '../screens/captain/CaptainFixturesScreen'
+import SquadSelectionScreen  from '../screens/captain/SquadSelectionScreen'
+import MatchScorecardScreen  from '../screens/admin/MatchScorecardScreen'
+import ProfileScreen         from '../screens/member/ProfileScreen'
 
 const Tab   = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -70,14 +71,6 @@ function CaptainTabs() {
           tabBarIcon: ({ focused }) => <TabIcon source={icons.fixtures} focused={focused} />,
         }}
       />
-      <Tab.Screen
-        name="CaptainPanelProfile"
-        component={AdminPanelProfileScreen}
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon source={icons.profile} focused={focused} />,
-        }}
-      />
     </Tab.Navigator>
   )
 }
@@ -95,6 +88,11 @@ export default function CaptainNavigator() {
         name={SCREENS.MATCH_SCORECARD}
         component={MatchScorecardScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name={SCREENS.PROFILE}
+        component={ProfileScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   )

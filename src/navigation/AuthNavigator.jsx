@@ -5,11 +5,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SCREENS } from '../lib/constants'
 import { colors } from '../theme'
 
-import WelcomeScreen from '../screens/public/WelcomeScreen'
-import LoginScreen   from '../screens/public/LoginScreen'
-import SignupScreen  from '../screens/public/SignupScreen'
-import PendingScreen    from '../screens/public/PendingScreen'
-import CheckEmailScreen from '../screens/public/CheckEmailScreen'
+import WelcomeScreen          from '../screens/public/WelcomeScreen'
+import LoginScreen             from '../screens/public/LoginScreen'
+import SignupScreen            from '../screens/public/SignupScreen'
+import PendingScreen           from '../screens/public/PendingScreen'
+import CheckEmailScreen        from '../screens/public/CheckEmailScreen'
+import ForgotPasswordScreen    from '../screens/public/ForgotPasswordScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -26,8 +27,9 @@ export default function AuthNavigator({ initialRoute = SCREENS.WELCOME }) {
       <Stack.Screen name={SCREENS.WELCOME} component={WelcomeScreen} />
       <Stack.Screen name={SCREENS.LOGIN}   component={LoginScreen} />
       <Stack.Screen name={SCREENS.SIGNUP}  component={SignupScreen} />
-      <Stack.Screen name={SCREENS.PENDING}     component={PendingScreen} />
-      <Stack.Screen name={SCREENS.CHECK_EMAIL} component={CheckEmailScreen} />
+      <Stack.Screen name={SCREENS.PENDING}          component={PendingScreen} />
+      <Stack.Screen name={SCREENS.CHECK_EMAIL}      component={CheckEmailScreen} />
+      <Stack.Screen name={SCREENS.FORGOT_PASSWORD}  component={ForgotPasswordScreen} />
     </Stack.Navigator>
   )
 }

@@ -16,7 +16,7 @@ const LOGO_SIZE    = 80     // each logo circle diameter
 const SEPARATE_X   = 64     // how far each logo moves outward
 const OUTER_RING   = 200    // outer orbit ring diameter
 const INNER_RING   = 170    // inner orbit ring diameter
-const CHAR_MS      = 90    // ms per typewriter character
+const CHAR_MS      = 55    // ms per typewriter character
 // ──────────────────────────────────────────────────────────────────────────────
 
 function PulseDot({ delay }) {

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { format, parseISO }  from 'date-fns'
 import { supabase }          from '../../lib/supabase'
+import { toTitleCase }       from '../../lib/constants'
 import useAuthStore          from '../../store/authStore'
 import AppIcon               from '../../components/AppIcon'
 import { colors, fonts, spacing, radius } from '../../theme'
@@ -70,7 +71,8 @@ function calcSR(runs, balls) {
 function calcEco(runs, overs) {
   const ov = dec(overs)
   if (!ov) return '—'
-  return (int(runs) / ov).toFixed(2)
+  const ovActual = (Math.floor(ov) * 6 + Math.round((ov - Math.floor(ov)) * 10)) / 6
+  return (int(runs) / ovActual).toFixed(2)
 }
 
 // ─── POTM reveal card (animated modal) ────────────────────────────────────────
@@ -183,15 +185,17 @@ export default function MatchScorecardScreen({ route, navigation }) {
   const [activeTab, setActiveTab] = useState(0)
 
   // ── Form state ───────────────────────────────────────────────────────────────
-  const [winner,   setWinner]   = useState(null)   // 'htcc' | 'opponent' | 'draw' | 'no_result'
+  const [winner,          setWinner]          = useState(null)   // 'htcc' | 'opponent' | 'draw' | 'no_result'
+  const [playcricketUrl,  setPlaycricketUrl]  = useState('')     // optional PlayCricket scorecard URL
   const [batting,  setBatting]  = useState({})     // { [player_id]: { runs, balls, fours, sixes, not_out, run_out } }
   const [bowling,  setBowling]  = useState({})     // { [player_id]: { overs, maidens, runs, wickets, no_balls, wides } }
   const [fielding, setFielding] = useState({})     // { [player_id]: { catches, stumpings } }
 
   // ── Submission ───────────────────────────────────────────────────────────────
-  const [submitting, setSubmitting] = useState(false)
-  const [showPOTM,   setShowPOTM]   = useState(false)
-  const [potmData,   setPotmData]   = useState(null)
+  const [submitting,   setSubmitting]   = useState(false)
+  const [savingDraft,  setSavingDraft]  = useState(false)
+  const [showPOTM,     setShowPOTM]     = useState(false)
+  const [potmData,     setPotmData]     = useState(null)
 
   // ── Fetch fixture + published squad ─────────────────────────────────────────
   useEffect(() => {
@@ -231,7 +235,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
 
       const formatted = (members || []).map(m => ({
         player_id:      m.profiles.id,
-        full_name:      m.profiles.full_name,
+        full_name:      toTitleCase(m.profiles.full_name),
         position_order: m.position_order,
         is_captain:     m.is_captain,
         is_wk:          m.is_wicketkeeper,
@@ -250,8 +254,11 @@ export default function MatchScorecardScreen({ route, navigation }) {
   const prefillExisting = async (fid, squadList) => {
     // Result
     const { data: res } = await supabase
-      .from('match_results').select('winner').eq('fixture_id', fid).maybeSingle()
-    if (res) setWinner(res.winner)
+      .from('match_results').select('winner, playcricket_url').eq('fixture_id', fid).maybeSingle()
+    if (res) {
+      setWinner(res.winner)
+      if (res.playcricket_url) setPlaycricketUrl(res.playcricket_url)
+    }
 
     // Batting
     const { data: bat } = await supabase
@@ -263,6 +270,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
           runs: String(r.runs), balls: String(r.balls),
           fours: String(r.fours), sixes: String(r.sixes),
           not_out: r.not_out,
+          run_out: r.run_out || false,
         }
       })
       setBatting(map)
@@ -346,7 +354,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
       else if (runs >= 50) pts += POTM.MILESTONE_50 + POTM.MILESTONE_25
       else if (runs >= 25) pts += POTM.MILESTONE_25
       // Duck penalty — dismissed for 0
-      if (runs === 0 && !bat.not_out) pts += POTM.DUCK_PEN
+      if (runs === 0 && !bat.not_out && (int(bat.balls) > 0 || bat.run_out)) pts += POTM.DUCK_PEN
       // Run out penalty — additional deduction if dismissed by run out
       if (bat.run_out && !bat.not_out) pts += POTM.RUN_OUT_PEN
 
@@ -360,9 +368,10 @@ export default function MatchScorecardScreen({ route, navigation }) {
       pts += int(bowl.no_balls) * POTM.NB_PEN
 
       // Economy penalty — tiered flat deduction, only when overs bowled > 0
-      const bowlOvers = dec(bowl.overs)
-      if (bowlOvers > 0) {
-        const eco = int(bowl.runs) / bowlOvers
+      const bowlOversRaw = dec(bowl.overs)
+      if (bowlOversRaw > 0) {
+        const bowlOversActual = (Math.floor(bowlOversRaw) * 6 + Math.round((bowlOversRaw - Math.floor(bowlOversRaw)) * 10)) / 6
+        const eco = int(bowl.runs) / bowlOversActual
         if      (eco >= 10) pts += POTM.ECO_PEN_10
         else if (eco >= 9)  pts += POTM.ECO_PEN_9
         else if (eco >= 8)  pts += POTM.ECO_PEN_8
@@ -386,6 +395,71 @@ export default function MatchScorecardScreen({ route, navigation }) {
     return { player: topPlayer, points: Math.max(0, topPoints) }
   }, [squad, batting, bowling, fielding])
 
+  // ── Save Draft ───────────────────────────────────────────────────────────────
+  // Persists batting / bowling / fielding without touching match_results or POTM.
+  // No winner required. Safe to call mid-match (e.g. after bowling innings only).
+  const handleSaveDraft = async () => {
+    setSavingDraft(true)
+    try {
+      // Batting — upsert all squad members (zeros preserved intentionally)
+      const batRows = squad.map(p => ({
+        fixture_id: fixtureId,
+        player_id:  p.player_id,
+        position:   p.position_order,
+        runs:     int(batting[p.player_id]?.runs),
+        balls:    int(batting[p.player_id]?.balls),
+        fours:    int(batting[p.player_id]?.fours),
+        sixes:    int(batting[p.player_id]?.sixes),
+        not_out:  batting[p.player_id]?.not_out || false,
+        run_out:  batting[p.player_id]?.run_out || false,
+      }))
+      const { error: batErr } = await supabase
+        .from('match_batting').upsert(batRows, { onConflict: 'fixture_id,player_id' })
+      if (batErr) throw batErr
+
+      // Bowling — only rows with actual data
+      const bowlRows = squad
+        .filter(p => dec(bowling[p.player_id]?.overs) > 0 || int(bowling[p.player_id]?.wickets) > 0)
+        .map(p => ({
+          fixture_id: fixtureId,
+          player_id:  p.player_id,
+          overs:    dec(bowling[p.player_id]?.overs),
+          maidens:  int(bowling[p.player_id]?.maidens),
+          runs:     int(bowling[p.player_id]?.runs),
+          wickets:  int(bowling[p.player_id]?.wickets),
+          no_balls: int(bowling[p.player_id]?.no_balls),
+          wides:    int(bowling[p.player_id]?.wides),
+        }))
+      if (bowlRows.length > 0) {
+        const { error: bowlErr } = await supabase
+          .from('match_bowling').upsert(bowlRows, { onConflict: 'fixture_id,player_id' })
+        if (bowlErr) throw bowlErr
+      }
+
+      // Fielding — only rows with catches or stumpings
+      const fieldRows = squad
+        .filter(p => int(fielding[p.player_id]?.catches) > 0 || int(fielding[p.player_id]?.stumpings) > 0)
+        .map(p => ({
+          fixture_id: fixtureId,
+          player_id:  p.player_id,
+          catches:   int(fielding[p.player_id]?.catches),
+          stumpings: int(fielding[p.player_id]?.stumpings),
+        }))
+      if (fieldRows.length > 0) {
+        const { error: fieldErr } = await supabase
+          .from('match_fielding').upsert(fieldRows, { onConflict: 'fixture_id,player_id' })
+        if (fieldErr) throw fieldErr
+      }
+
+      Alert.alert('Draft Saved', 'Progress saved. Come back any time to continue — no result or POTM calculated yet.')
+    } catch (err) {
+      console.error('[Scorecard] draft error:', err.message)
+      Alert.alert('Save Failed', err.message)
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!winner) {
@@ -397,11 +471,12 @@ export default function MatchScorecardScreen({ route, navigation }) {
     try {
       // 1. Match result
       const { error: resErr } = await supabase.from('match_results').upsert({
-        fixture_id:   fixtureId,
+        fixture_id:      fixtureId,
         winner,
-        submitted_by: profile.id,
-        submitted_at: new Date().toISOString(),
-      })
+        playcricket_url: playcricketUrl.trim() || null,
+        submitted_by:    profile.id,
+        submitted_at:    new Date().toISOString(),
+      }, { onConflict: 'fixture_id' })
       if (resErr) throw resErr
 
       // 2. Batting rows — upsert all squad members
@@ -416,7 +491,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
         not_out:     batting[p.player_id]?.not_out  || false,
         run_out:     batting[p.player_id]?.run_out  || false,
       }))
-      const { error: batErr } = await supabase.from('match_batting').upsert(batRows)
+      const { error: batErr } = await supabase.from('match_batting').upsert(batRows, { onConflict: 'fixture_id,player_id' })
       if (batErr) throw batErr
 
       // 3. Bowling rows — only players with overs or wickets entered
@@ -433,7 +508,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
           wides:       int(bowling[p.player_id]?.wides),
         }))
       if (bowlRows.length > 0) {
-        const { error: bowlErr } = await supabase.from('match_bowling').upsert(bowlRows)
+        const { error: bowlErr } = await supabase.from('match_bowling').upsert(bowlRows, { onConflict: 'fixture_id,player_id' })
         if (bowlErr) throw bowlErr
       }
 
@@ -447,7 +522,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
           stumpings:  int(fielding[p.player_id]?.stumpings),
         }))
       if (fieldRows.length > 0) {
-        const { error: fieldErr } = await supabase.from('match_fielding').upsert(fieldRows)
+        const { error: fieldErr } = await supabase.from('match_fielding').upsert(fieldRows, { onConflict: 'fixture_id,player_id' })
         if (fieldErr) throw fieldErr
       }
 
@@ -459,7 +534,7 @@ export default function MatchScorecardScreen({ route, navigation }) {
           player_id:     potmPlayer.player_id,
           points:        potmPoints,
           calculated_at: new Date().toISOString(),
-        })
+        }, { onConflict: 'fixture_id' })
         if (potmErr) throw potmErr
 
         // 6. Push notification to all squad members announcing POTM
@@ -482,6 +557,50 @@ export default function MatchScorecardScreen({ route, navigation }) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // ── Sticky column header — rendered outside ScrollView so it never scrolls ──
+  // paddingHorizontal: 20 = 12 (tabContent) + 8 (playerRow) → aligns with playerRow edges
+  // stickyStatRow paddingLeft: 24 = playerRowInputs paddingLeft → cells align pixel-perfect
+  const renderStickyHeader = () => {
+    if (activeTab === 1) return (
+      <View style={s.stickyHeaderOuter}>
+        <Text style={s.stickyPlayerLabel}>#  PLAYER</Text>
+        <View style={s.stickyStatRow}>
+          <Text style={[s.thCell, { width: 44 }]}>R</Text>
+          <Text style={[s.thCell, { width: 44 }]}>B</Text>
+          <Text style={[s.thCell, { width: 36 }]}>4s</Text>
+          <Text style={[s.thCell, { width: 36 }]}>6s</Text>
+          <Text style={[s.thCell, { width: 46 }]}>SR</Text>
+          <Text style={[s.thCell, { width: 38 }]}>NO</Text>
+          <Text style={[s.thCell, { width: 38 }]}>RO</Text>
+        </View>
+      </View>
+    )
+    if (activeTab === 2) return (
+      <View style={s.stickyHeaderOuter}>
+        <Text style={s.stickyPlayerLabel}>#  PLAYER</Text>
+        <View style={s.stickyStatRow}>
+          <Text style={[s.thCell, { width: 42 }]}>Ov</Text>
+          <Text style={[s.thCell, { width: 36 }]}>Md</Text>
+          <Text style={[s.thCell, { width: 36 }]}>R</Text>
+          <Text style={[s.thCell, { width: 36 }]}>W</Text>
+          <Text style={[s.thCell, { width: 36 }]}>Wd</Text>
+          <Text style={[s.thCell, { width: 36 }]}>NB</Text>
+          <Text style={[s.thCell, { width: 46 }]}>Eco</Text>
+        </View>
+      </View>
+    )
+    if (activeTab === 3) return (
+      <View style={s.stickyHeaderOuter}>
+        <Text style={s.stickyPlayerLabel}>#  PLAYER</Text>
+        <View style={s.stickyStatRow}>
+          <Text style={[s.thCell, { width: 60 }]}>Ct</Text>
+          <Text style={[s.thCell, { width: 60 }]}>St</Text>
+        </View>
+      </View>
+    )
+    return null
   }
 
   // ── Result tab ───────────────────────────────────────────────────────────────
@@ -517,6 +636,22 @@ export default function MatchScorecardScreen({ route, navigation }) {
             </TouchableOpacity>
           )
         })}
+
+        {/* ── PlayCricket scorecard URL ── */}
+        <Text style={[s.tabSectionLabel, { marginTop: 24 }]}>PLAYCRICKET SCORECARD (OPTIONAL)</Text>
+        <Text style={s.urlHint}>Paste full PlayCricket scorecard URL — members will see a link at the bottom of the scorecard.</Text>
+        <TextInput
+          style={s.urlInput}
+          value={playcricketUrl}
+          onChangeText={setPlaycricketUrl}
+          onEndEditing={e => setPlaycricketUrl(e.nativeEvent.text)}
+          placeholder="https://play-cricket.com/…"
+          placeholderTextColor="rgba(139,155,180,0.4)"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          returnKeyType="done"
+        />
       </View>
     )
   }
@@ -524,17 +659,6 @@ export default function MatchScorecardScreen({ route, navigation }) {
   // ── Batting tab ──────────────────────────────────────────────────────────────
   const renderBatting = () => (
     <View style={s.tabContent}>
-      {/* Column headers */}
-      <View style={s.tableHeader}>
-        <Text style={[s.thCell, { flex: 1 }]}>#  PLAYER</Text>
-        <Text style={[s.thCell, { width: 44 }]}>R</Text>
-        <Text style={[s.thCell, { width: 44 }]}>B</Text>
-        <Text style={[s.thCell, { width: 36 }]}>4s</Text>
-        <Text style={[s.thCell, { width: 36 }]}>6s</Text>
-        <Text style={[s.thCell, { width: 46 }]}>SR</Text>
-        <Text style={[s.thCell, { width: 38 }]}>NO</Text>
-      </View>
-
       {squad.map((player, idx) => {
         const pid  = player.player_id
         const bat  = batting[pid] || {}
@@ -605,18 +729,6 @@ export default function MatchScorecardScreen({ route, navigation }) {
 
     return (
       <View style={s.tabContent}>
-        {/* Column headers */}
-        <View style={s.tableHeader}>
-          <Text style={[s.thCell, { flex: 1 }]}>#  PLAYER</Text>
-          <Text style={[s.thCell, { width: 42 }]}>Ov</Text>
-          <Text style={[s.thCell, { width: 36 }]}>Md</Text>
-          <Text style={[s.thCell, { width: 36 }]}>R</Text>
-          <Text style={[s.thCell, { width: 36 }]}>W</Text>
-          <Text style={[s.thCell, { width: 36 }]}>NB</Text>
-          <Text style={[s.thCell, { width: 36 }]}>Wd</Text>
-          <Text style={[s.thCell, { width: 46 }]}>Eco</Text>
-        </View>
-
         {bowlingSquad.map(player => {
           const pid     = player.player_id
           const bowl    = bowling[pid] || {}
@@ -650,8 +762,8 @@ export default function MatchScorecardScreen({ route, navigation }) {
                 <NumCell value={bowl.maidens}  onChange={v => updateBowl(pid, 'maidens',  v)} width={36} />
                 <NumCell value={bowl.runs}     onChange={v => updateBowl(pid, 'runs',     v)} width={36} />
                 <NumCell value={bowl.wickets}  onChange={v => updateBowl(pid, 'wickets',  v)} width={36} />
-                <NumCell value={bowl.no_balls} onChange={v => updateBowl(pid, 'no_balls', v)} width={36} />
                 <NumCell value={bowl.wides}    onChange={v => updateBowl(pid, 'wides',    v)} width={36} />
+                <NumCell value={bowl.no_balls} onChange={v => updateBowl(pid, 'no_balls', v)} width={36} />
                 {/* Economy — auto calculated */}
                 <View style={[s.numCell, { width: 46, justifyContent: 'center' }]}>
                   <Text style={s.calcText}>{calcEco(bowl.runs, bowl.overs)}</Text>
@@ -667,13 +779,6 @@ export default function MatchScorecardScreen({ route, navigation }) {
   // ── Fielding tab ─────────────────────────────────────────────────────────────
   const renderFielding = () => (
     <View style={s.tabContent}>
-      {/* Column headers */}
-      <View style={s.tableHeader}>
-        <Text style={[s.thCell, { flex: 1 }]}>#  PLAYER</Text>
-        <Text style={[s.thCell, { width: 60 }]}>Ct</Text>
-        <Text style={[s.thCell, { width: 60 }]}>St</Text>
-      </View>
-
       {squad.map(player => {
         const pid   = player.player_id
         const field = fielding[pid] || {}
@@ -760,6 +865,9 @@ export default function MatchScorecardScreen({ route, navigation }) {
         ))}
       </View>
 
+      {/* Sticky column headers — outside ScrollView, never scrolls */}
+      {activeTab > 0 && renderStickyHeader()}
+
       {/* Tab content */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -776,19 +884,32 @@ export default function MatchScorecardScreen({ route, navigation }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Submit button */}
+      {/* Footer — Draft + Submit */}
       <View style={[s.submitBar, { paddingBottom: 16 + insets.bottom }]}>
-        <TouchableOpacity
-          style={[s.submitBtn, submitting && s.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-          activeOpacity={0.8}
-        >
-          {submitting
-            ? <ActivityIndicator color={colors.navy} size="small" />
-            : <Text style={s.submitBtnText}>Submit Scorecard</Text>
-          }
-        </TouchableOpacity>
+        <View style={s.submitRow}>
+          <TouchableOpacity
+            style={[s.draftBtn, (savingDraft || submitting) && s.submitBtnDisabled]}
+            onPress={handleSaveDraft}
+            disabled={savingDraft || submitting}
+            activeOpacity={0.8}
+          >
+            {savingDraft
+              ? <ActivityIndicator color={colors.textMuted} size="small" />
+              : <Text style={s.draftBtnText}>Save Draft</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.submitBtn, (submitting || savingDraft) && s.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting || savingDraft}
+            activeOpacity={0.8}
+          >
+            {submitting
+              ? <ActivityIndicator color={colors.navy} size="small" />
+              : <Text style={s.submitBtnText}>Submit Scorecard</Text>
+            }
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* POTM reveal */}
@@ -898,6 +1019,26 @@ const s = StyleSheet.create({
     marginLeft: 4,
   },
 
+  // ── PlayCricket URL input ──
+  urlHint: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  urlInput: {
+    backgroundColor: 'rgba(22,34,54,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.white,
+  },
+
   // ── Result cards ──
   resultCard: {
     flexDirection: 'row',
@@ -928,15 +1069,29 @@ const s = StyleSheet.create({
     marginTop: 1,
   },
 
-  // ── Table header ──
-  tableHeader: {
+  // ── Sticky column header (outside ScrollView) ──
+  // paddingHorizontal: 20 = tabContent(12) + playerRow(8) → aligns with playerRow content
+  stickyHeaderOuter: {
+    backgroundColor: 'rgba(10,22,38,0.98)',
+    paddingHorizontal: 20,
+    paddingTop: 7,
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245,197,24,0.2)',
+  },
+  stickyPlayerLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: colors.gold,
+    marginBottom: 4,
+  },
+  // paddingLeft: 24 = playerRowInputs.paddingLeft → input cells align pixel-perfect
+  stickyStatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-    marginBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245,197,24,0.15)',
+    gap: 4,
+    paddingLeft: 24,
   },
   thCell: {
     fontFamily: fonts.bold,
@@ -1072,7 +1227,27 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
   },
+  submitRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  draftBtn: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(139,155,180,0.3)',
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  draftBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    letterSpacing: 1,
+    color: colors.textMuted,
+  },
   submitBtn: {
+    flex: 2,
     backgroundColor: colors.gold,
     borderRadius: radius.md,
     paddingVertical: 14,
