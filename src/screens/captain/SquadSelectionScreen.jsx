@@ -152,6 +152,9 @@ export default function SquadSelectionScreen({ navigation, route }) {
   const [roleModal,   setRoleModal]   = useState({ open: false, player: null })
   const [prompted,    setPrompted]    = useState({})
   const [promptModal, setPromptModal] = useState({ open: false, playerId: null, playerName: '' })
+  // Availability override (long-press 3s on pool player)
+  const [availModal,  setAvailModal]  = useState({ open: false, player: null })
+  const [savingAvail, setSavingAvail] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -192,10 +195,11 @@ export default function SquadSelectionScreen({ navigation, route }) {
       .eq('team_id', teamId).eq('status', 'active')
     if (!members) return
 
-    const { data: avail } = await supabase
-      .from('availability').select('player_id, status, updated_at').eq('fixture_id', fixtureId)
+    const { data: avail, error: availErr } = await supabase
+      .from('availability').select('player_id, status, updated_at, set_by_admin').eq('fixture_id', fixtureId)
+    if (availErr) console.warn('[SquadSelection] avail fetch error:', availErr.message)
     const availMap = {}
-    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at } })
+    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at, setByAdmin: a.set_by_admin || false } })
 
     const { data: sameDay } = await supabase
       .from('fixtures').select('id, teams(name)').eq('match_date', matchDate).neq('id', fixtureId)
@@ -204,7 +208,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
     if (sameDay?.length > 0) {
       const { data: squadRows } = await supabase
         .from('squads').select('fixture_id, squad_members(player_id)')
-        .in('fixture_id', sameDay.map(f => f.id)).eq('published', true)
+        .in('fixture_id', sameDay.map(f => f.id))
       // Build fixture_id → team name lookup
       const fixtureTeamMap = {}
       sameDay.forEach(f => { fixtureTeamMap[f.id] = f.teams?.name || 'Another Team' })
@@ -224,6 +228,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
       color:          m.profiles?.avatar_color || colors.gold,
       status:         availMap[m.player_id]?.status || null,
       availUpdatedAt: availMap[m.player_id]?.updatedAt || null,
+      setByAdmin:     availMap[m.player_id]?.setByAdmin || false,
       conflict:       conflictIds.includes(m.player_id),
       conflictTeam:   conflictTeamMap[m.player_id] || null,
     })).sort((a, b) => {
@@ -330,6 +335,38 @@ export default function SquadSelectionScreen({ navigation, route }) {
     setPromptModal({ open: false, playerId: null, playerName: '' })
   }
 
+  // ── Availability override (long-press 3s on pool player) ─────────────────
+  const AVAIL_OPTIONS = [
+    { key: 'available',   label: 'Available',   color: colors.green,     bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.3)'   },
+    { key: 'tentative',   label: 'Tentative',   color: '#F97316',        bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.3)'  },
+    { key: 'unavailable', label: 'Unavailable', color: colors.red,       bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)'  },
+    { key: null,          label: 'Not Set',     color: colors.textMuted, bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)' },
+  ]
+
+  const handleSetAvail = async (status) => {
+    const { player } = availModal
+    if (!player) return
+    setSavingAvail(true)
+    try {
+      // RPC bypasses RLS (availability only allows player_id = auth.uid() for direct writes)
+      const { error: rpcErr } = await supabase.rpc('set_availability_as_admin', {
+        p_fixture_id: fixtureId,
+        p_player_id:  player.id,
+        p_status:     status,
+      })
+      if (rpcErr) throw new Error(rpcErr.message)
+      // Optimistic local patch — update only this player in place, no full reload
+      const now = new Date().toISOString()
+      setPlayers(prev => prev.map(p =>
+        p.id === player.id
+          ? { ...p, status: status, availUpdatedAt: status ? now : null, setByAdmin: status ? true : false }
+          : p
+      ))
+      setAvailModal({ open: false, player: null })
+    } catch (err) { Alert.alert('Error', err.message) }
+    finally { setSavingAvail(false) }
+  }
+
   const openRoleModal = (player) => setRoleModal({ open: true, player })
 
   // ── Derived role info — memoised to avoid re-scanning selected on every render ──
@@ -407,6 +444,17 @@ export default function SquadSelectionScreen({ navigation, route }) {
         { text: 'Publish', onPress: async () => {
           setSaving(true)
           try {
+            // ── Capture old squad members BEFORE handleSave overwrites them ──
+            // Used below to detect removed players and auto-clear their fantasy picks.
+            let oldMemberIds = []
+            if (squad?.id) {
+              const { data: oldMembers } = await supabase
+                .from('squad_members')
+                .select('player_id')
+                .eq('squad_id', squad.id)
+              oldMemberIds = (oldMembers || []).map(m => m.player_id)
+            }
+
             const squadId = await handleSave(true)
             if (!squadId) return
 
@@ -437,17 +485,67 @@ export default function SquadSelectionScreen({ navigation, route }) {
               fixture_id: fixtureId,
             })
 
+            // ── Auto-remove fantasy picks for players dropped from the squad ──
+            // When a squad is edited and republished, any player who was in the old
+            // squad but NOT in the new squad must be removed from all fantasy teams
+            // for this fixture — freeing up a slot so pickers can choose a replacement.
+            // Only runs before the matchday cutoff (11:00 on match day).
+            try {
+              const newSelectedIds = selected.map(p => p.id)
+              const removedPlayerIds = oldMemberIds.filter(id => !newSelectedIds.includes(id))
+              const cutoff      = new Date(fixture.match_date + 'T11:00:00')
+              const isPastCutoff = new Date() >= cutoff
+
+              if (removedPlayerIds.length > 0 && !isPastCutoff) {
+                // Query affected managers BEFORE deleting (rows gone after delete)
+                const { data: affectedPicks } = await supabase
+                  .from('fantasy_picks')
+                  .select('team_id, fantasy_teams!team_id(member_id)')
+                  .eq('fixture_id', fixtureId)
+                  .in('player_id', removedPlayerIds)
+
+                // Delete fantasy picks for removed players tied to this fixture
+                await supabase.from('fantasy_picks')
+                  .delete()
+                  .eq('fixture_id', fixtureId)
+                  .in('player_id', removedPlayerIds)
+
+                const affectedManagerIds = [
+                  ...new Set(
+                    (affectedPicks || [])
+                      .map(p => p.fantasy_teams?.member_id)
+                      .filter(Boolean)
+                  )
+                ]
+                if (affectedManagerIds.length > 0) {
+                  const dropTitle = '⚠️ Squad Update'
+                  const dropBody  = `A player in your fantasy XI was removed from the ${fixture?.teams?.name || 'squad'}. You have an open slot — pick a replacement!`
+                  sendPushToUsers(affectedManagerIds, dropTitle, dropBody, {
+                    type: 'fantasy_pick_removed', screen: SCREENS.FANTASY_LEAGUE,
+                  })
+                  insertNotifications(affectedManagerIds, 'fantasy_pick_removed', dropTitle, dropBody, {
+                    fixture_id: fixtureId,
+                  })
+                }
+              }
+            } catch (autoRemoveErr) {
+              console.warn('[SquadPublish] Auto-remove fantasy picks failed:', autoRemoveErr.message)
+            }
+
             // ── Fantasy Unlocked check ──────────────────────────────────────
-            // After every squad publish, check if ALL fixtures on this matchday
+            // After every squad publish, check if ALL MCCL fixtures on this matchday
             // now have a published squad. If so, notify ALL members to pick fantasy.
+            // Friendly and CSVL (sunday_comp) publishes never trigger fantasy unlock.
             try {
               const matchDate = fixture?.match_date
-              if (matchDate) {
-                // Get all fixtures for this matchday
+              const matchType = fixture?.match_type
+              if (matchDate && matchType === 'league') {
+                // Get all MCCL fixtures for this matchday only
                 const { data: sameDayFixtures } = await supabase
                   .from('fixtures')
                   .select('id')
                   .eq('match_date', matchDate)
+                  .eq('match_type', 'league')
 
                 if (sameDayFixtures?.length > 0) {
                   const allFixtureIds = sameDayFixtures.map(f => f.id)
@@ -622,6 +720,12 @@ export default function SquadSelectionScreen({ navigation, route }) {
                 player.conflict && styles.playerRowConflict,
               ]}
               onPress={() => canSelect && togglePlayer(player)}
+              onLongPress={() => {
+                if (['admin','superadmin'].includes(profile?.role)) {
+                  setAvailModal({ open: true, player })
+                }
+              }}
+              delayLongPress={400}
               activeOpacity={canSelect ? 0.7 : 1}
               disabled={!canSelect && !isSelected}
             >
@@ -643,7 +747,7 @@ export default function SquadSelectionScreen({ navigation, route }) {
                   <Text style={styles.conflictTeamLabel}>{player.conflictTeam}</Text>
                 )}
                 {formatAvailTS(player.availUpdatedAt) && (
-                  <Text style={styles.availTimestamp}>
+                  <Text style={[styles.availTimestamp, player.setByAdmin && styles.availTimestampAdmin]}>
                     Last Updated: {formatAvailTS(player.availUpdatedAt)}
                   </Text>
                 )}
@@ -755,6 +859,41 @@ export default function SquadSelectionScreen({ navigation, route }) {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* ── Availability override modal ── */}
+      <Modal
+        visible={availModal.open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAvailModal({ open: false, player: null })}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setAvailModal({ open: false, player: null })}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>{availModal.player?.name}</Text>
+            <Text style={styles.modalSub}>Set availability on their behalf</Text>
+            {AVAIL_OPTIONS.map(opt => (
+              <TouchableOpacity
+                key={String(opt.key)}
+                style={[styles.availOptionBtn, { borderColor: opt.border, backgroundColor: opt.bg }]}
+                onPress={() => handleSetAvail(opt.key)}
+                disabled={savingAvail}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.availOptionDot, { backgroundColor: opt.color }]} />
+                <Text style={[styles.availOptionText, { color: opt.color }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setAvailModal({ open: false, player: null })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* ── Role assignment modal ── */}
@@ -874,6 +1013,7 @@ const styles = StyleSheet.create({
   playerNameSelected:{ fontFamily: fonts.bold, color: colors.white },
   conflictTeamLabel: { fontFamily: fonts.bold, fontSize: 10, color: '#EF4444', marginTop: 1, letterSpacing: 0.3 },
   availTimestamp:    { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
+  availTimestampAdmin: { color: '#F5C518', opacity: 1 },
   conflictBadge:     { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   conflictBadgeText: { fontFamily: fonts.bold, fontSize: 16, color: '#EF4444', lineHeight: 20 },
   availBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
@@ -964,4 +1104,9 @@ const styles = StyleSheet.create({
   roleOptionClearText: { fontFamily: fonts.bold, fontSize: 13, color: colors.red },
   modalClose:        { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   modalCloseText:    { fontFamily: fonts.bold, fontSize: 14, color: colors.textMuted },
+
+  // ── Avail override modal ────────────────────────────────────────────────
+  availOptionBtn:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: spacing.md, borderWidth: 1, borderRadius: radius.md, marginBottom: 8 },
+  availOptionDot:  { width: 10, height: 10, borderRadius: 5 },
+  availOptionText: { fontFamily: fonts.bold, fontSize: 14 },
 })

@@ -251,6 +251,31 @@ export const insertNotifications = async (userIds, type, title, body, extra = {}
   if (error) console.warn('[Push] insertNotifications error:', error.message)
 }
 
+// ─── Notify admins of a new member / join request (bypasses RLS) ─────────────
+// Uses a SECURITY DEFINER RPC so pending users can trigger admin notifications.
+// The RPC inserts in-app notifications server-side; we send the push client-side
+// using the returned push tokens.
+export const notifyAdmins = async (title, body, type = 'approval') => {
+  try {
+    const { data: tokens, error } = await supabase.rpc('notify_admins_new_member', {
+      p_title: title,
+      p_body:  body,
+      p_type:  type,
+    })
+    if (error) {
+      console.warn('[Push] notifyAdmins RPC error:', error.message)
+      return
+    }
+    // Send push using returned tokens (RPC already inserted in-app notifications)
+    const valid = (tokens || []).filter(t => t && t.startsWith('ExponentPushToken'))
+    if (valid.length > 0) {
+      await _sendToTokens(valid, title, body, { type })
+    }
+  } catch (err) {
+    console.warn('[Push] notifyAdmins error:', err.message)
+  }
+}
+
 // ─── Insert in-app notifications for all members of a role ───────────────────
 // Mirrors the same role hierarchy as sendPushToRole for consistency.
 export const insertNotificationsForRole = async (targetRole, type, title, body, extra = {}) => {

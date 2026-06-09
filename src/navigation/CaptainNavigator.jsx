@@ -1,6 +1,5 @@
 // pavilion-app/src/navigation/CaptainNavigator.jsx
-// Captain panel navigator — fixtures, squad selection, profile
-// Profile accessed via TopHeader avatar (not a tab)
+// Captain panel navigator — matchday, fixtures, training, squad selection, profile
 
 import React from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,10 +10,13 @@ import { SCREENS }                    from '../lib/constants'
 import { colors, fonts }              from '../theme'
 import icons                          from '../lib/icons'
 
-import CaptainFixturesScreen from '../screens/captain/CaptainFixturesScreen'
-import SquadSelectionScreen  from '../screens/captain/SquadSelectionScreen'
-import MatchScorecardScreen  from '../screens/admin/MatchScorecardScreen'
-import ProfileScreen         from '../screens/member/ProfileScreen'
+import CaptainFixturesScreen  from '../screens/captain/CaptainFixturesScreen'
+import CaptainMatchdayScreen  from '../screens/captain/CaptainMatchdayScreen'
+import CaptainTrainingScreen  from '../screens/captain/CaptainTrainingScreen'
+import SquadSelectionScreen   from '../screens/captain/SquadSelectionScreen'
+import MatchScorecardScreen   from '../screens/admin/MatchScorecardScreen'
+import TrainingDetailScreen   from '../screens/admin/TrainingDetailScreen'
+import ProfileScreen          from '../screens/member/ProfileScreen'
 
 const Tab   = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -64,11 +66,27 @@ function CaptainTabs() {
       }}
     >
       <Tab.Screen
+        name={SCREENS.CAPTAIN_MATCHDAY}
+        component={CaptainMatchdayScreen}
+        options={{
+          title: 'Matchday',
+          tabBarIcon: ({ focused }) => <TabIcon source={icons.matchday} focused={focused} />,
+        }}
+      />
+      <Tab.Screen
         name={SCREENS.CAPTAIN_FIXTURES}
         component={CaptainFixturesScreen}
         options={{
           title: 'Fixtures',
           tabBarIcon: ({ focused }) => <TabIcon source={icons.fixtures} focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name={SCREENS.CAPTAIN_TRAINING}
+        component={CaptainTrainingScreen}
+        options={{
+          title: 'Training',
+          tabBarIcon: ({ focused }) => <TabIcon source={icons.training} focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -88,6 +106,11 @@ export default function CaptainNavigator() {
         name={SCREENS.MATCH_SCORECARD}
         component={MatchScorecardScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name={SCREENS.TRAINING_DETAIL}
+        component={TrainingDetailScreen}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name={SCREENS.PROFILE}

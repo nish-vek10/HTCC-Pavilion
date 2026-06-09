@@ -78,7 +78,7 @@ function toLocalISO(d) {
         if (data) { setAllTeams(data); if (!selectedTeamId) setSelectedTeamId(data[0]?.id || null) }
       } else {
         const { data: tm } = await supabase.from('team_members')
-          .select('teams(id, name, day_type)').eq('player_id', profile.id).eq('status', 'active').limit(1).single()
+          .select('teams(id, name, day_type)').eq('player_id', profile.id).eq('status', 'active').eq('is_captain', true).maybeSingle()
         if (tm?.teams) { setMyTeam(tm.teams); setSelectedTeamId(tm.teams.id) }
       }
     } finally {
@@ -98,13 +98,17 @@ function toLocalISO(d) {
     const fixtureIds = data.map(f => f.id)
     const [{ data: avail }, { data: members }] = await Promise.all([
       fixtureIds.length
-        ? supabase.from('availability').select('fixture_id, status').in('fixture_id', fixtureIds)
+        ? supabase.from('availability').select('fixture_id, player_id, status').in('fixture_id', fixtureIds)
         : Promise.resolve({ data: [] }),
-      supabase.from('team_members').select('team_id').eq('team_id', selectedTeamId).eq('status', 'active'),
+      supabase.from('team_members').select('team_id, player_id').eq('team_id', selectedTeamId).eq('status', 'active'),
     ])
+
+    // Active player set for this team — filters ex-members from counts
+    const activePlayers = new Set(members?.map(m => m.player_id) || [])
 
     const ac = {}
     avail?.forEach(a => {
+      if (!activePlayers.has(a.player_id)) return   // skip ex-members
       if (!ac[a.fixture_id]) ac[a.fixture_id] = { available: 0, tentative: 0, unavailable: 0 }
       if (ac[a.fixture_id][a.status] !== undefined) ac[a.fixture_id][a.status]++
     })
@@ -315,13 +319,7 @@ function toLocalISO(d) {
                         activeOpacity={0.8}>
                         <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Select Squad'}</Text>
                       </TouchableOpacity>
-                      {isPublished ? (
-                        <TouchableOpacity style={styles.scorecardBtn}
-                          onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
-                          activeOpacity={0.8}>
-                          <Text style={styles.scorecardBtnText}>Submit Scores</Text>
-                        </TouchableOpacity>
-                      ) : (
+                      {!isPublished && (
                         <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(fixture)} activeOpacity={0.8}>
                           <AppIcon name="edit" size={14} tint={colors.gold} />
                         </TouchableOpacity>
@@ -421,15 +419,7 @@ function toLocalISO(d) {
                     activeOpacity={0.8}>
                     <Text style={styles.squadBtnText}>{isPublished ? 'View Squad' : 'Select Squad'}</Text>
                   </TouchableOpacity>
-                  {isPublished ? (
-                    <>
-                      <TouchableOpacity style={styles.scorecardBtn}
-                        onPress={() => navigation.navigate(SCREENS.MATCH_SCORECARD, { fixtureId: fixture.id })}
-                        activeOpacity={0.8}>
-                        <Text style={styles.scorecardBtnText}>Submit Scores</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
+                  {!isPublished && (
                     <>
                       {new Date(fixture.match_date) >= new Date() && (
                         <TouchableOpacity style={styles.remindBtn}

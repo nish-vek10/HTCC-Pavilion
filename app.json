@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pavilion",
     "slug": "pavilion-htcc",
-    "version": "1.4.2",
+    "version": "1.5.7",
     "orientation": "portrait",
     "icon": "./assets/pavilion-icon-1024.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.htcc.pavilion",
-      "buildNumber": "9",
+      "buildNumber": "16",
       "infoPlist": {
         "NSCameraUsageDescription": "Pavilion does not use your camera.",
         "NSPhotoLibraryUsageDescription": "Pavilion does not access your photos.",
@@ -30,7 +30,7 @@
         "backgroundColor": "#0D1B2A"
       },
       "package": "com.htcc.pavilion",
-      "versionCode": 8,
+      "versionCode": 16,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",

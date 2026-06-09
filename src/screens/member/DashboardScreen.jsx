@@ -665,11 +665,10 @@ export default function DashboardScreen({ navigation }) {
       await fetchJoinRequests()
 
       // ── Notify all admins of the new join request ─────────────────────────
-      const { sendPushToRole, insertNotificationsForRole } = await import('../../lib/pushNotifications')
+      const { notifyAdmins } = await import('../../lib/pushNotifications')
       const notifTitle = 'New Team Join Request'
       const notifBody  = `${profile.full_name} has requested to join ${team.name}.`
-      sendPushToRole('admin', notifTitle, notifBody, { type: 'approval' })
-      insertNotificationsForRole('admin', 'approval', notifTitle, notifBody)
+      notifyAdmins(notifTitle, notifBody, 'approval')
     } catch (err) {
       console.error('join request error:', err.message)
     } finally {

@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, FlatList, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal,
+  KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { format, parseISO } from 'date-fns'
@@ -42,13 +43,18 @@ export default function AdminMembersScreen({ navigation }) {
   const currentUser  = useAuthStore(s => s.profile)
   const isSuperAdmin = useAuthStore(s => s.isSuperAdmin)
 
-  const [members,   setMembers]   = useState([])
-  const [teams,     setTeams]     = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [refreshing,setRefreshing]= useState(false)
-  const [search,    setSearch]    = useState('')
-  const [filter,    setFilter]    = useState('all')
-  const [roleModal, setRoleModal] = useState({ open: false, member: null })
+  const [members,         setMembers]         = useState([])
+  const [teams,           setTeams]           = useState([])
+  const [loading,         setLoading]         = useState(true)
+  const [refreshing,      setRefreshing]      = useState(false)
+  const [search,          setSearch]          = useState('')
+  const [filter,          setFilter]          = useState('all')
+  const [roleModal,       setRoleModal]       = useState({ open: false, member: null })
+  // Captain team picker — shown after selecting 'captain' role
+  const [captainTeamModal, setCaptainTeamModal] = useState({ open: false, memberId: null, memberName: '' })
+  // Play Cricket ID editor
+  const [pcModal, setPcModal] = useState({ open: false, member: null, value: '' })
+  const [savingPcId, setSavingPcId] = useState(false)
 
   useFocusEffect(useCallback(() => { loadAll() }, []))
 
@@ -79,7 +85,7 @@ export default function AdminMembersScreen({ navigation }) {
 
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles')
-      .select('id, full_name, phone, role, created_at, team_members(team_id, teams(name))')
+      .select('id, full_name, phone, role, created_at, pc_member_id, team_members(team_id, teams(name))')
       .order('full_name')
     if (data) setMembers(data)
   }
@@ -99,40 +105,75 @@ export default function AdminMembersScreen({ navigation }) {
     if (newRole === 'admin' && !isSuperAdmin?.()) { Alert.alert('Error', 'Only a Super Admin can promote to Admin'); return }
 
     // Rejected = DELETE profile row entirely — 'rejected' is not a valid role enum
+    // Use SECURITY DEFINER RPC — direct delete is blocked by RLS
     if (newRole === 'rejected') {
-      await supabase.from('profiles').delete().eq('id', memberId)
+      const { data: deleted, error } = await supabase.rpc('delete_pending_profile', { p_member_id: memberId })
+      if (error || !deleted) {
+        Alert.alert('Error', 'Failed to reject application. Please try again.')
+        return
+      }
       setMembers(prev => prev.filter(m => m.id !== memberId))
       setRoleModal({ open: false, member: null })
       return
     }
 
+    // Captain — close role modal first, show team picker to assign which team
+    if (newRole === 'captain') {
+      setRoleModal({ open: false, member: null })
+      setCaptainTeamModal({ open: true, memberId, memberName })
+      return
+    }
+
+    await applyRoleChange(memberId, newRole, memberName)
+  }
+
+  // ── Confirm captain + team assignment ──────────────────────────────────────
+  const handleCaptainTeamSelect = async (teamId, teamName) => {
+    const { memberId, memberName } = captainTeamModal
+    setCaptainTeamModal({ open: false, memberId: null, memberName: '' })
+
+    // 1. Set role = captain on profile
+    const { error } = await supabase.from('profiles').update({ role: 'captain' }).eq('id', memberId)
+    if (error) { Alert.alert('Error', 'Failed to update role'); return }
+
+    // 2. Clear is_captain on all their existing team_members rows
+    await supabase.from('team_members').update({ is_captain: false }).eq('player_id', memberId)
+
+    // 3. Set is_captain = true for the selected team (upsert ensures row exists)
+    await supabase.from('team_members').upsert(
+      { player_id: memberId, team_id: teamId, status: 'active', is_captain: true },
+      { onConflict: 'player_id,team_id' }
+    )
+
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: 'captain' } : m))
+    sendPushToUser(memberId, "You've Been Made Captain", `Congratulations! You are now captain of ${teamName}. You have access to the Captain panel and squad selection.`, { type: 'role_change' })
+    insertNotification(memberId, 'role_change', "You've Been Made Captain", `Congratulations! You are now captain of ${teamName}.`)
+  }
+
+  const applyRoleChange = async (memberId, newRole, memberName) => {
     const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', memberId)
     if (error) { Alert.alert('Error', 'Failed to update role'); return }
 
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m))
 
-    // Notification content per role
-    let notifTitle = ''
-    let notifBody  = ''
-    let notifType  = 'role_change'
+    // If demoted from captain, clear is_captain flag
+    if (newRole === 'member') {
+      await supabase.from('team_members').update({ is_captain: false }).eq('player_id', memberId)
+    }
 
+    let notifTitle = '', notifBody = '', notifType = 'role_change'
     if (newRole === 'member') {
       notifTitle = 'Application Approved'
       notifBody  = 'Welcome to Harrow Town Cricket Club! Your membership has been approved. You now have full access to Pavilion.'
       notifType  = 'approval'
-    } else if (newRole === 'captain') {
-      notifTitle = 'You\'ve Been Made Captain'
-      notifBody  = 'Congratulations! You have been promoted to Captain. You now have access to the Captain panel and squad selection.'
     } else if (newRole === 'admin') {
-      notifTitle = 'You\'ve Been Made Admin'
+      notifTitle = "You've Been Made Admin"
       notifBody  = 'You have been granted Admin access to the Pavilion platform. You can now manage fixtures, members, and training sessions.'
     }
-
     if (notifTitle) {
       sendPushToUser(memberId, notifTitle, notifBody, { type: notifType })
       insertNotification(memberId, notifType, notifTitle, notifBody)
     }
-
     setRoleModal({ open: false, member: null })
   }
 
@@ -175,6 +216,31 @@ export default function AdminMembersScreen({ navigation }) {
     captain: members.filter(m => m.role === 'captain').length,
     admin:   members.filter(m => ['admin','superadmin'].includes(m.role)).length,
   }), [members])
+
+  // ── Save Play Cricket member ID ───────────────────────────────────────────
+  const handleSavePcId = async () => {
+    const { member, value } = pcModal
+    if (!member) return
+    setSavingPcId(true)
+    try {
+      const pcId = value.trim() ? parseInt(value.trim(), 10) : null
+      if (value.trim() && isNaN(pcId)) {
+        Alert.alert('Invalid ID', 'Play Cricket ID must be a number.')
+        return
+      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({ pc_member_id: pcId })
+        .eq('id', member.id)
+      if (error) throw error
+      setMembers(prev => prev.map(m => m.id === member.id ? { ...m, pc_member_id: pcId } : m))
+      setPcModal({ open: false, member: null, value: '' })
+    } catch (err) {
+      Alert.alert('Error', err.message)
+    } finally {
+      setSavingPcId(false)
+    }
+  }
 
   // ── Memoised callbacks passed to MemberCard to prevent re-renders ────────
   const onTeamToggle  = useCallback(handleTeamToggle, [teams])
@@ -244,6 +310,20 @@ export default function AdminMembersScreen({ navigation }) {
             onPress={() => onRoleModal(member)}
             activeOpacity={0.7}>
             <Text style={styles.changeRoleText}>Change Role: {member.role}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Play Cricket ID link — only for non-pending active players */}
+        {member.role !== 'pending' && (
+          <TouchableOpacity
+            style={styles.pcIdRow}
+            onPress={() => setPcModal({ open: true, member, value: member.pc_member_id ? String(member.pc_member_id) : '' })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.pcIdLabel}>PC ID</Text>
+            <Text style={[styles.pcIdValue, !member.pc_member_id && styles.pcIdMissing]}>
+              {member.pc_member_id ? String(member.pc_member_id) : 'Not linked — tap to set'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -328,6 +408,7 @@ export default function AdminMembersScreen({ navigation }) {
                 activeOpacity={0.7}>
                 <Text style={[styles.roleOptionText, roleModal.member?.role === role && styles.roleOptionTextActive]}>
                   {role.charAt(0).toUpperCase() + role.slice(1)}
+                  {role === 'captain' ? '  →  Select team' : ''}
                 </Text>
                 {roleModal.member?.role === role && <Text style={styles.roleCheck}>✓</Text>}
               </TouchableOpacity>
@@ -337,6 +418,77 @@ export default function AdminMembersScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ── Captain team picker modal ── */}
+      <Modal visible={captainTeamModal.open} transparent animationType="slide"
+        onRequestClose={() => setCaptainTeamModal({ open: false, memberId: null, memberName: '' })}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1}
+          onPress={() => setCaptainTeamModal({ open: false, memberId: null, memberName: '' })}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Captain of Which Team?</Text>
+            <Text style={styles.modalSub}>{toTitleCase(captainTeamModal.memberName)}</Text>
+            {teams.map(team => (
+              <TouchableOpacity key={team.id}
+                style={styles.roleOption}
+                onPress={() => handleCaptainTeamSelect(team.id, team.name)}
+                activeOpacity={0.7}>
+                <Text style={styles.roleOptionText}>{team.name}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancel}
+              onPress={() => setCaptainTeamModal({ open: false, memberId: null, memberName: '' })}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Play Cricket ID editor modal ──────────────────────────────────── */}
+      <Modal visible={pcModal.open} transparent animationType="slide"
+        onRequestClose={() => setPcModal({ open: false, member: null, value: '' })}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1}
+            onPress={() => setPcModal({ open: false, member: null, value: '' })}>
+            <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>PLAY CRICKET ID</Text>
+              <Text style={styles.modalSub}>{toTitleCase(pcModal.member?.full_name)}</Text>
+              <Text style={styles.pcModalHint}>
+                Enter the Play Cricket member ID. Found in PC admin or any match scorecard.
+              </Text>
+              <TextInput
+                style={styles.pcModalInput}
+                value={pcModal.value}
+                onChangeText={v => setPcModal(p => ({ ...p, value: v }))}
+                placeholder="e.g. 3778631"
+                placeholderTextColor="rgba(139,155,180,0.4)"
+                keyboardType="number-pad"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSavePcId}
+              />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={[styles.modalCancel, { flex: 1, marginTop: 0, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 14 }]}
+                  onPress={() => setPcModal({ open: false, member: null, value: '' })}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.approveBtn, { flex: 1, justifyContent: 'center' }]}
+                  onPress={handleSavePcId}
+                  disabled={savingPcId}>
+                  {savingPcId
+                    ? <ActivityIndicator size="small" color={colors.navy} />
+                    : <Text style={styles.approveBtnText}>Confirm</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )
@@ -389,8 +541,16 @@ const styles = StyleSheet.create({
   rejectBtn:       { flex: 1, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', borderRadius: radius.md, paddingVertical: 10, alignItems: 'center' },
   rejectBtnText:   { fontFamily: fonts.bold, fontSize: 13, color: colors.red },
 
-  changeRoleBtn:   { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 9, alignItems: 'center' },
+  changeRoleBtn:   { backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 9, alignItems: 'center', marginBottom: 6 },
   changeRoleText:  { fontFamily: fonts.bold, fontSize: 12, color: colors.textMuted },
+
+  // ── Play Cricket ID row ──
+  pcIdRow:         { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
+  pcIdLabel:       { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: colors.textMuted, width: 44 },
+  pcIdValue:       { fontFamily: fonts.body, fontSize: 12, color: colors.white },
+  pcIdMissing:     { color: '#F97316', fontStyle: 'italic' },
+  pcModalHint:     { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginBottom: 12, lineHeight: 16 },
+  pcModalInput:    { backgroundColor: 'rgba(22,34,54,0.8)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.2)', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.body, fontSize: 16, color: colors.white },
 
   modalBackdrop:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet:      { backgroundColor: colors.navyLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: 'rgba(245,197,24,0.15)', padding: spacing.lg, paddingBottom: 40 },

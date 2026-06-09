@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator, Animated, Easing, Modal, Linking, Alert,
+  TextInput, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
@@ -14,6 +15,7 @@ import useAuthStore     from '../../store/authStore'
 import { AVAILABILITY_CONFIG, MATCH_TYPE_LABELS, teamColor, toTitleCase } from '../../lib/constants'
 import { colors, fonts, spacing, radius } from '../../theme'
 import AppIcon from '../../components/AppIcon'
+import { calcPlayerPoints } from '../../lib/fantasyPoints'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDateFull(dateStr) {
@@ -38,47 +40,9 @@ function toLocalISO(d) {
   return `${y}-${m}-${day}`
 }
 
-// ─── Client-side POTM points calculation — mirrors MatchScorecardScreen ──────
+// ─── Client-side POTM points — delegates to shared fantasyPoints.js ──────────
 function calculatePoints(bat, bowl, field) {
-  let pts = 0
-  if (bat) {
-    const runs  = bat.runs  || 0
-    const fours = bat.fours || 0
-    const sixes = bat.sixes || 0
-    pts += runs * 1
-    pts += fours * 2
-    pts += sixes * 4
-    if (bat.not_out && runs >= 30) pts += 5
-    if (runs >= 100) pts += 40 + 20 + 10
-    else if (runs >= 50) pts += 20 + 10
-    else if (runs >= 25) pts += 10
-    // Duck penalty — dismissed for 0
-    if (runs === 0 && !bat.not_out && ((bat.balls || 0) > 0 || bat.run_out)) pts -= 5
-    // Run out penalty — additional deduction
-    if (bat.run_out && !bat.not_out) pts -= 8
-  }
-  if (bowl && (bowl.overs > 0 || bowl.wickets > 0)) {
-    const wickets = bowl.wickets || 0
-    const overs   = parseFloat(bowl.overs || 0)
-    pts += wickets * 25
-    pts += (bowl.maidens  || 0) * 5
-    pts += (bowl.wides    || 0) * -1
-    pts += (bowl.no_balls || 0) * -2
-    if (wickets >= 5) pts += 25 + 10
-    else if (wickets >= 3) pts += 10
-    if (overs > 0) {
-      const eco = (bowl.runs || 0) / overs
-      if      (eco >= 10) pts -= 8
-      else if (eco >= 9)  pts -= 5
-      else if (eco >= 8)  pts -= 3
-      else if (eco >= 7)  pts -= 2
-    }
-  }
-  if (field) {
-    pts += (field.catches   || 0) * 10
-    pts += (field.stumpings || 0) * 10
-  }
-  return pts
+  return calcPlayerPoints(bat, bowl, field).total
 }
 
 // ─── Build performance stat lines per player ───────────────────────────────────
@@ -163,7 +127,8 @@ const POINTS_REF = {
     { action: 'Per wicket',          pts: '+25' },
     { action: 'Per maiden',          pts: '+5' },
     { action: '3+ wickets bonus',    pts: '+10' },
-    { action: '5+ wickets bonus',    pts: '+25' },
+    { action: '4+ wickets bonus',    pts: '+15' },
+    { action: '5+ wickets bonus',    pts: '+30' },
     { action: 'Per wide',            pts: '−1' },
     { action: 'Per no-ball',         pts: '−2' },
     { action: 'Economy 7–8',         pts: '−2' },
@@ -331,6 +296,11 @@ export default function FixtureDetailScreen({ route, navigation }) {
   const [loading,      setLoading]      = useState(true)
   const [showPoints,   setShowPoints]   = useState(false)
 
+  // ── PlayCricket URL inline edit (admin/captain only) ─────────────────────────
+  const [urlModal,     setUrlModal]     = useState(false)
+  const [urlInput,     setUrlInput]     = useState('')
+  const [savingUrl,    setSavingUrl]    = useState(false)
+
   // useFocusEffect ensures re-fetch whenever screen gains focus (e.g. navigating
   // back from MatchScorecardScreen after submitting a result).
   useFocusEffect(
@@ -440,27 +410,51 @@ export default function FixtureDetailScreen({ route, navigation }) {
     setSubmitting(true)
     try {
       if (myStatus === status) {
-        await supabase.from('availability').delete()
+        const { error: delErr } = await supabase.from('availability').delete()
           .eq('fixture_id', fixtureId).eq('player_id', profile.id)
+        if (delErr) throw new Error(delErr.message)
         setMyStatus(null)
       } else {
-        await supabase.from('availability').upsert(
-          { fixture_id: fixtureId, player_id: profile.id, status },
+        const { error: upsertErr } = await supabase.from('availability').upsert(
+          { fixture_id: fixtureId, player_id: profile.id, status, set_by_admin: false },
           { onConflict: 'fixture_id,player_id' }
         )
+        if (upsertErr) throw new Error(upsertErr.message)
         setMyStatus(status)
       }
     } catch (err) {
       console.error('handleAvailability error:', err.message)
+      Alert.alert('Error', 'Failed to update availability. Please try again.')
     } finally {
       setSubmitting(false)
     }
   }
 
+  // ── Save PlayCricket URL (admin/captain) ─────────────────────────────────────
+  const handleSaveUrl = async () => {
+    const url = urlInput.trim()
+    if (!url) { Alert.alert('No URL', 'Paste PlayCricket URL first.'); return }
+    setSavingUrl(true)
+    try {
+      const { error } = await supabase.from('match_results')
+        .update({ playcricket_url: url })
+        .eq('fixture_id', fixtureId)
+      if (error) throw error
+      setResult(prev => ({ ...prev, playcricket_url: url }))
+      setUrlModal(false)
+      setUrlInput('')
+    } catch (err) {
+      Alert.alert('Save Failed', err.message)
+    } finally {
+      setSavingUrl(false)
+    }
+  }
+
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const today        = toLocalISO(new Date())
-  const hasResult    = !!result
-  const isPast       = fixture?.match_date <= today || hasResult
+  const today              = toLocalISO(new Date())
+  const hasResult          = !!result
+  const isPast             = fixture?.match_date <= today || hasResult
+  const isAdminOrCaptain   = ['admin', 'superadmin'].includes(profile?.role)
   const isInSquad    = squadMembers.some(sm => sm.player_id === profile?.id)
   const captain      = squadMembers.find(sm => sm.is_captain)
   const wk           = squadMembers.find(sm => sm.is_wicketkeeper)
@@ -617,27 +611,41 @@ export default function FixtureDetailScreen({ route, navigation }) {
               )
             })}
 
-            {/* PlayCricket full scorecard link */}
-            {result?.playcricket_url ? (
-              <TouchableOpacity
-                style={st.playcricketBtn}
-                onPress={() => {
-                  // Extract first valid URL from field — admin may paste full result
-                  // text alongside the link (e.g. "Team A 120/5 https://...")
-                  const raw = result.playcricket_url.trim()
-                  const match = raw.match(/https?:\/\/\S+/)
-                  const url = match ? match[0] : `https://${raw}`
-                  Linking.openURL(url).catch(() =>
-                    Alert.alert('Cannot Open', 'Unable to open the PlayCricket link.')
-                  )
-                }}
-                activeOpacity={0.75}
-              >
-                <AppIcon name="send" size={14} tint={colors.gold} />
-                <Text style={st.playcricketBtnText}>View Full Scorecard on PlayCricket</Text>
-                <Text style={st.playcricketArrow}>›</Text>
-              </TouchableOpacity>
-            ) : null}
+            {/* PlayCricket full scorecard link + admin/captain edit */}
+            <View style={st.playcricketRow}>
+              {result?.playcricket_url ? (
+                <TouchableOpacity
+                  style={[st.playcricketBtn, { flex: 1 }]}
+                  onPress={() => {
+                    const raw   = result.playcricket_url.trim()
+                    const match = raw.match(/https?:\/\/\S+/)
+                    const url   = match ? match[0] : `https://${raw}`
+                    Linking.openURL(url).catch(() =>
+                      Alert.alert('Cannot Open', 'Unable to open PlayCricket link.')
+                    )
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <AppIcon name="send" size={14} tint={colors.gold} />
+                  <Text style={st.playcricketBtnText}>View Full Scorecard on PlayCricket</Text>
+                  <Text style={st.playcricketArrow}>›</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={[st.playcricketBtn, { flex: 1, opacity: 0.4 }]} pointerEvents="none">
+                  <AppIcon name="send" size={14} tint={colors.textMuted} />
+                  <Text style={[st.playcricketBtnText, { color: colors.textMuted }]}>No PlayCricket URL yet</Text>
+                </View>
+              )}
+              {isAdminOrCaptain && (
+                <TouchableOpacity
+                  style={st.editUrlBtn}
+                  onPress={() => { setUrlInput(result?.playcricket_url || ''); setUrlModal(true) }}
+                  activeOpacity={0.7}
+                >
+                  <AppIcon name="edit" size={13} tint={colors.gold} />
+                </TouchableOpacity>
+              )}
+            </View>
           </>
         ) : (
           <>
@@ -781,6 +789,44 @@ export default function FixtureDetailScreen({ route, navigation }) {
 
       {/* Points breakdown modal */}
       <PointsModal visible={showPoints} onClose={() => setShowPoints(false)} />
+
+      {/* ── PlayCricket URL edit modal ── */}
+      <Modal visible={urlModal} transparent animationType="fade" onRequestClose={() => setUrlModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable style={st.urlModalBackdrop} onPress={() => setUrlModal(false)}>
+            <Pressable style={st.urlModalBox} onPress={() => {}}>
+              <Text style={st.urlModalTitle}>PLAYCRICKET URL</Text>
+              <Text style={st.urlModalSub}>Paste full PlayCricket scorecard link. Updates immediately for all members.</Text>
+              <TextInput
+                style={st.urlModalInput}
+                value={urlInput}
+                onChangeText={setUrlInput}
+                placeholder="https://harrowtown.play-cricket.com/…"
+                placeholderTextColor="rgba(139,155,180,0.4)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveUrl}
+                autoFocus
+              />
+              <View style={st.urlModalBtns}>
+                <TouchableOpacity style={st.urlModalCancelBtn} onPress={() => setUrlModal(false)} activeOpacity={0.7}>
+                  <Text style={st.urlModalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.urlModalSaveBtn, (savingUrl || !urlInput.trim()) && { opacity: 0.4 }]}
+                  onPress={handleSaveUrl}
+                  disabled={savingUrl || !urlInput.trim()}
+                  activeOpacity={0.8}
+                >
+                  <Text style={st.urlModalSaveText}>{savingUrl ? 'Saving…' : 'Save URL'}</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -1018,4 +1064,20 @@ const st = StyleSheet.create({
   noSquadCard:     { backgroundColor: colors.navyLight, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.xl, alignItems: 'center', marginBottom: spacing.md },
   noSquadTitle:    { fontFamily: fonts.bold, fontSize: 15, color: colors.white, marginBottom: 6 },
   noSquadText:     { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, textAlign: 'center' },
+
+  // ── PlayCricket URL row + edit ──
+  playcricketRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  editUrlBtn:          { width: 42, height: 42, borderRadius: radius.md, backgroundColor: 'rgba(245,197,24,0.08)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.2)', alignItems: 'center', justifyContent: 'center' },
+
+  // ── URL edit modal ──
+  urlModalBackdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
+  urlModalBox:         { backgroundColor: colors.navyLight, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg, width: '100%' },
+  urlModalTitle:       { fontFamily: fonts.display, fontSize: 20, letterSpacing: 1, color: colors.white, marginBottom: 6 },
+  urlModalSub:         { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, lineHeight: 20, marginBottom: spacing.md },
+  urlModalInput:       { backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.body, fontSize: 13, color: colors.white, marginBottom: spacing.md },
+  urlModalBtns:        { flexDirection: 'row', gap: 10 },
+  urlModalCancelBtn:   { flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
+  urlModalCancelText:  { fontFamily: fonts.bold, fontSize: 14, color: colors.textMuted },
+  urlModalSaveBtn:     { flex: 1, backgroundColor: colors.gold, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
+  urlModalSaveText:    { fontFamily: fonts.bold, fontSize: 14, color: colors.navy },
 })

@@ -14,6 +14,7 @@ import TopHeader from '../../components/layout/TopHeader'
 import { colors, fonts, spacing, radius } from '../../theme'
 import { SCREENS, MATCH_TYPE_LABELS, toTitleCase, teamColor } from '../../lib/constants'
 import AppIcon from '../../components/AppIcon'
+import { sendPushToUser, insertNotification } from '../../lib/pushNotifications'
 
 // ─── Configurable ─────────────────────────────────────────────────────────────
 const FIXTURE_LIMIT = 8
@@ -182,14 +183,20 @@ export default function AdminDashboardScreen({ navigation }) {
     if (error) { Alert.alert('Error', 'Failed to approve member'); return }
     setPending(prev => prev.filter(p => p.id !== memberId))
     setStats(prev => ({ ...prev, pending: prev.pending - 1, members: prev.members + 1 }))
+    sendPushToUser(memberId, 'Application Approved', 'Welcome to Harrow Town Cricket Club! Your membership has been approved. You now have full access to Pavilion.', { type: 'approval' })
+    insertNotification(memberId, 'approval', 'Application Approved', 'Welcome to Harrow Town Cricket Club! Your membership has been approved. You now have full access to Pavilion.')
   }
 
   const handleReject = async (memberId, name) => {
     Alert.alert('Reject Application', `Reject and remove ${name}'s application?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Reject', style: 'destructive', onPress: async () => {
-        // DELETE profile row — 'rejected' is not a valid role enum
-        await supabase.from('profiles').delete().eq('id', memberId)
+        // Use SECURITY DEFINER RPC — direct delete is blocked by RLS
+        const { data: deleted, error } = await supabase.rpc('delete_pending_profile', { p_member_id: memberId })
+        if (error || !deleted) {
+          Alert.alert('Error', 'Failed to reject application. Please try again.')
+          return
+        }
         setPending(prev => prev.filter(p => p.id !== memberId))
         setStats(prev => ({ ...prev, pending: prev.pending - 1 }))
       }},
@@ -202,11 +209,18 @@ export default function AdminDashboardScreen({ navigation }) {
     if (error) { Alert.alert('Error', 'Failed to add to team'); return }
     await supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id)
     setJoinRequests(prev => prev.filter(r => r.id !== req.id))
+    const teamName = req.teams?.name || 'the team'
+    sendPushToUser(req.player_id, 'Join Request Approved', `Your request to join ${teamName} has been approved!`, { type: 'approval' })
+    insertNotification(req.player_id, 'approval', 'Join Request Approved', `Your request to join ${teamName} has been approved!`)
   }
 
   const handleRejectJoin = async (req) => {
-    await supabase.from('join_requests').update({ status: 'rejected' }).eq('id', req.id)
+    const { error } = await supabase.from('join_requests').update({ status: 'rejected' }).eq('id', req.id)
+    if (error) { Alert.alert('Error', 'Failed to reject request'); return }
     setJoinRequests(prev => prev.filter(r => r.id !== req.id))
+    const teamName = req.teams?.name || 'the team'
+    sendPushToUser(req.player_id, 'Join Request Declined', `Your request to join ${teamName} was not approved at this time.`, { type: 'approval' })
+    insertNotification(req.player_id, 'approval', 'Join Request Declined', `Your request to join ${teamName} was not approved at this time.`)
   }
 
   const getInitials = (name) => name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'

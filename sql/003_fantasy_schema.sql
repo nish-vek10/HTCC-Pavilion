@@ -4,12 +4,12 @@
 
 -- ─── fantasy_teams — one row per member ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS fantasy_teams (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  member_id  uuid REFERENCES profiles(id) ON DELETE CASCADE,
-  team_name  text NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(member_id),
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id        uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  team_name        text NOT NULL,
+  member_full_name text,                         -- denormalised for leaderboard display
+  created_at       timestamptz DEFAULT now(),
+  updated_at       timestamptz DEFAULT now(),
   UNIQUE(team_name)
 );
 

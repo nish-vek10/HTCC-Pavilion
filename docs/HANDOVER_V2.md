@@ -1,9 +1,9 @@
 # Pavilion HTCC — Handover v2
 
-> **Date:** April 2026
-> **Version:** 1.2.1 / Build 5
+> **Date:** May 2026
+> **Version:** 1.5.5 / iOS Build 15 / Android versionCode 15
 > **iOS:** LIVE on App Store
-> **Android:** AAB submitted to Google Play Store — APK available for sideload
+> **Android:** LIVE on Google Play Store
 > **Author:** Anish Vekaria
 
 ---
@@ -271,6 +271,14 @@ C:\Users\ravil\PycharmProjects\HTCC-Pavilion\
 | `training_availability` | Player availability per training session |
 | `notifications` | In-app notification inbox |
 | `notifications_log` | Push notification audit trail |
+| `match_batting` | In-app scorecard batting rows per fixture+player |
+| `match_bowling` | In-app scorecard bowling rows per fixture+player |
+| `match_fielding` | In-app scorecard fielding rows per fixture+player |
+| `match_results` | Submitted result per fixture (win/loss/NR + scores) |
+| `match_potm` | POTM player_id + points per fixture |
+| `fantasy_teams` | One team per member — `id`, `user_id`, `name` |
+| `fantasy_picks` | Squad picks per fantasy team per matchday |
+| `fantasy_scores` | Calculated total_points per team per matchday |
 
 ### PlayCricket tables (prefixed `pc_`)
 | Table | Purpose |
@@ -568,7 +576,22 @@ python -m src.calc_awards
 - [x] Training session management — create, delete, recurring
 - [x] Announcements — post to all/members/captains/admins
 - [x] Matchday overview — availability counts, progress bar, prompt players
-- [x] Admin notified on new signup and join requests
+- [x] Admin notified on new signup and join requests (push + in-app)
+- [x] In-app scorecard submission — batting, bowling, fielding per player
+- [x] POTM auto-calculated and revealed on scorecard submit
+- [x] PlayCricket scorecard pull — MCCL, Cup, CSVL, all match types
+- [x] Draft save on scorecards — resume without losing data
+
+### Fantasy League
+- [x] Full FPL-style Fantasy League — create team, pick Best XI, assign C/VC
+- [x] Fantasy picks gated per matchday — unlocks when league squad published
+- [x] Fantasy picks excluded for CSVL (sunday_comp) fixtures — MCCL only
+- [x] Auto-remove fantasy picks when player dropped from squad; managers notified
+- [x] Captain ×3 / Vice-Captain ×2 multipliers
+- [x] Fantasy scores calculated via `recalculate_fantasy_scores_for_fixture` RPC
+- [x] Leaderboard per matchday + overall season standings
+- [x] Push notification when all Saturday scorecards submitted — shows matchday leader
+- [x] `fantasy_points_updated` notification routes to Fantasy League screen on tap
 
 ### Platform
 - [x] Full PNG icon system — AppIcon component, ICON_SCALE, FORCED_TINTS
@@ -592,9 +615,14 @@ python -m src.calc_awards
 | Remaining emojis | ✅ FIXED v1.3.0 | Full audit — zero emojis remaining across all screens and constants |
 | Training session edit | ✅ FIXED v1.3.0 | Edit UI built — pre-populated form, single-session update, recurring badge preserved |
 | Performance — AdminMembersScreen | ✅ FIXED v1.3.0 | FlatList virtualisation, `windowSize:5`, `removeClippedSubviews`, memoised renderItem |
-| Fantasy League | DEFERRED v1.4.0 | Coming Soon screen live — full FPL-style feature planned next |
+| Fantasy League | ✅ BUILT v1.5.0 | Full FPL-style feature live — picks, leaderboard, POTM notifications |
+| Points formula — stacked milestones/hauls | ✅ FIXED v1.5.1 | Stacked correctly; 4W bonus added; all past scores recalculated |
+| DNB players imported as Not Out | ✅ FIXED v1.5.1 | `DNB_CODES` separate from `NOT_OUT_CODES` in `playCricketApi.js` — skipped entirely |
+| Friendly fixtures in POTM/points stats | ✅ FIXED v1.5.1 | `passesFilterCompetitive` excludes friendly from POTM count and total_points |
+| Stats awards shown only for POTM winners | ✅ FIXED v1.5.1 | Awards shown for all players with any match data |
+| Fantasy picks not removed on squad change | ✅ FIXED v1.5.1 | Auto-removed + managers notified when player dropped from squad |
+| Fantasy unlock fires for all match types | ✅ FIXED v1.5.1 | Fantasy unlock notifications scoped to MCCL league only |
 | PlayCricket official ECB API token | PENDING | Applied for, scraper used as interim |
-| Android Play Store listing | IN REVIEW | AAB submitted, awaiting approval |
 | Admin web dashboard — pending approvals | PENDING | Join request approvals not showing on web admin dashboard |
 | Away fixture venues | MANUAL PROCESS | Update via staging table each season — see Section 20 |
 
@@ -608,6 +636,8 @@ python -m src.calc_awards
 | Build 3 | ❌ Rejected — missing account deletion |
 | Build 4 — v1.2.0 | ✅ Approved and LIVE |
 | Build 5 — v1.2.1 | ✅ Approved and LIVE |
+| Build 12 — v1.5.1 | ✅ Submitted to App Store |
+| Build 15 — v1.5.5 | ✅ Current build — submitted |
 
 **App Store Connect:** `https://appstoreconnect.apple.com/apps/6761196439`
 **Bundle ID:** `com.htcc.pavilion`
@@ -616,13 +646,13 @@ python -m src.calc_awards
 ### Android
 | Item | Status |
 |---|---|
-| AAB — production build | ✅ Built and submitted to Play Store |
-| APK — preview build | ✅ Built for sideload distribution |
-| Play Store listing | 🔄 In review |
+| AAB — v1.2.1 (versionCode 5) | ✅ LIVE on Play Store |
+| AAB — v1.5.1 (versionCode 14) | ✅ Submitted |
+| AAB — v1.5.5 (versionCode 15) | ✅ Current build — submitted |
 
 **Play Console:** `https://play.google.com/console/u/0/developers/5496674967732676898/app/4972011997061754233/app-dashboard`
 **Package:** `com.htcc.pavilion`
-**versionCode:** 5
+**versionCode:** 15
 
 ---
 
@@ -659,7 +689,7 @@ python -m src.calc_awards
 
 ---
 
-## 16. Completed This Sprint — v1.3.0
+## 16. Completed — v1.3.0
 
 | Item | Detail |
 |---|---|
@@ -675,58 +705,87 @@ python -m src.calc_awards
 
 ---
 
-## 17. Next Release — v1.4.0
+## 17. Completed — v1.5.x (May 2026)
 
-### Priority 1 — Fantasy League (full build)
-Full FPL-style fantasy cricket feature. Coming Soon screen already live.
+### Fantasy League — Full Build
 
-**Scope:**
-- New Supabase tables: `fantasy_teams`, `fantasy_picks`, `fantasy_results`
-- `fantasy_teams`: `id`, `member_id`, `team_name` (unique constraint), `total_points`, `created_at`
-- `fantasy_picks`: `id`, `fantasy_team_id`, `pc_player_id`, `is_captain`, `is_vice_captain`
-- `fantasy_results`: points per player per gameweek, updated after sync
-- Member flow: create team (unique name) → pick Best XI → assign C/VC → view leaderboard
-- Points: same formula as `calc_awards.py` — captain = 3×, vice-captain = 2×
-- Leaderboard screen showing all fantasy teams ranked by total points
-- Edit team: swap players, rename (unique check), change C/VC
-- Supabase function to recalculate fantasy points after each `calc_awards.py` run
+| Item | Detail |
+|---|---|
+| Fantasy League screen | Full FPL-style feature — create team, pick Best XI, assign C/VC, view leaderboard |
+| `fantasy_teams` table | One team per member — name unique constraint |
+| `fantasy_picks` table | Player picks per fantasy_team per matchday with `is_captain`, `is_vc` flags |
+| `fantasy_scores` table | `team_id`, `matchday`, `total_points`, `calculated_at` — upserted on each recalc |
+| Captain / VC multipliers | Captain ×3, Vice-Captain ×2 |
+| `recalculate_fantasy_scores_for_fixture` RPC | Recalcs all picks in a matchday atomically — called after every scorecard submit |
+| Fantasy picks gated to MCCL | Fantasy picks only apply to `match_type = 'league'` fixtures — CSVL excluded |
+| Fantasy unlock notifications | Only fire on MCCL league squad publication — not CSVL or friendlies |
+| Auto-remove fantasy picks | Picks removed + managers notified when player dropped from squad |
+| Matchday complete push notification | Fires when all Saturday MCCL scorecards submitted — shows top team name + pts |
+| `fantasy_points_updated` notification type | Routes to Fantasy League screen on tap in both push handler and NotificationsScreen |
+
+### In-App Scorecard
+
+| Item | Detail |
+|---|---|
+| `MatchScorecardScreen.jsx` | Admin/captain submits batting, bowling, fielding per player |
+| POTM auto-calculated | Highest scorer per match awarded POTM — animated reveal card |
+| `match_potm` table | Stores `fixture_id`, `player_id`, `points` per match |
+| `match_batting` / `match_bowling` / `match_fielding` | New tables for in-app scorecard data |
+| `match_results` table | Win/loss/NR, team scores, stored per fixture |
+| Draft save | Progress saved without locking result — resume any time |
+| PlayCricket scorecard pull | Pull from PlayCricket for all match types — MCCL, Cup, CSVL |
+| DNB fix | `DNB_CODES` separate from `NOT_OUT_CODES` in `playCricketApi.js` — DNB players skipped entirely, never imported as Not Out |
+
+### Points System Rebalance (v1.5.1)
+
+| Item | Detail |
+|---|---|
+| Stacked batting milestones | 25 = +10 · 50 = +10+20=+30 · 100 = +10+20+40=+70 (stacked, not exclusive) |
+| 4-wicket haul bonus | New +15 bonus for 4W haul added |
+| Stacked bowling hauls | 3W = +10 · 4W = +10+15=+25 · 5W = +10+15+30=+55 |
+| `fantasyPoints.js` | `FOUR_WKT: 15`, `FIVE_WKT: 30`, `THREE_WKT: 10` — stacking logic |
+| `MatchScorecardScreen.jsx` | POTM constants updated to match |
+| `FixtureDetailScreen.jsx` / `FantasyLeagueScreen.jsx` | Points reference tables updated with 4W bonus |
+| All past scores recalculated | `017_points_rebalance_v2.sql` re-ran — all `match_potm.points` and `fantasy_scores` recomputed |
+
+### Stats Screen
+
+| Item | Detail |
+|---|---|
+| Awards shown for all players | Condition changed from `potm_count > 0` to `bat_innings > 0 || bowl_balls > 0` |
+| Friendly excluded from POTM/points | `passesFilterCompetitive` filter — always excludes `friendly` regardless of comp filter selection |
+| Total points accurate | MCCL + Cup + CSVL all contribute; friendly never counted |
+| `calcPlayerPoints` imported | Stats screen uses shared `fantasyPoints.js` — no duplicate point logic |
+
+### Push Notifications
+
+| Item | Detail |
+|---|---|
+| Admin approval notifications | Push + in-app on new signup and join request — routes to Admin Dashboard on tap |
+| Matchday complete notification | All Saturday MCCL scorecards locked → push to all members with leading team + pts |
+| `fantasy_points_updated` routing | `App.jsx` + `NotificationsScreen.jsx` — taps route to Fantasy League |
 
 ---
 
-### Priority 2 — In-app scorecard submission
-Admin/captain submits match scores immediately after a match. Points calculated instantly.
+## 18. Next Release — v1.6.0
 
-**Scope:**
-- `MatchScorecardScreen.jsx` — accessible from `FixtureDetailScreen` or `AdminMatchdayScreen` for published squads only
-- Input per player: batting (runs, balls, fours, sixes, how out), bowling (overs, maidens, runs, wickets), fielding (catches, run outs, stumpings)
-- On submit: calculate points using same formula as `calc_awards.py`, determine POTM, write to Supabase
-- Push notification to squad announcing POTM instantly
-
-**Decision needed before building:**
-Write to existing `pc_batting` / `pc_bowling` / `pc_match_points` tables OR maintain a new separate `match_scores` table.
-
----
-
-### Priority 3 — Team of the Week
+### Priority 1 — Team of the Week
 Highlight highest-scoring player per position each week.
 
 **Scope:**
-- New `pc_team_of_week` Supabase table
-- New `calc_team_of_week()` function in `calc_awards.py`
-- New section in `StatsScreen` or dedicated screen
+- New `team_of_week` Supabase table
 - Admin trigger to publish weekly
+- New section in `StatsScreen` or dedicated screen
 
----
+### Priority 2 — Fantasy League Enhancements
+- Transfer window — allow pick changes between matchdays
+- All-time season leaderboard view
+- Head-to-head matchday comparisons
+- Player form/stats visible from pick screen
 
-### Priority 4 — Android Play Store
-Confirm listing approved and app is live.
-
----
-
-### Priority 5 — Further performance
-- Add `getItemLayout` to FlatLists where row height is fixed
-- Reduce Supabase query payload — `select('*')` → select only needed columns
-- Reduce real-time channel subscriptions — consolidate where possible
+### Priority 3 — Further Performance
+- `getItemLayout` on FlatLists with fixed row height
+- `select('*')` → select only needed columns on heavy queries
 - Lazy load heavy screens (Stats modal, AdminMatchday player list)
 - Admin web dashboard — pending join request approvals fix
 
@@ -890,9 +949,15 @@ AND home_away = 'home';
 | `AppIcon FORCED_TINTS` | `date` = gold, `time` = gold, `venue` = blue — change here, updates everywhere |
 | Medal/trophy icons | Never apply `tintColor` — they have own colours baked in |
 | Tab bar icon sizes | `width:28, height:28` inside `width:32, height:32` ring — set in navigators, not AppIcon |
-| `MIN_SPLASH_MS` in `App.jsx` | Currently `3500` |
+| `MIN_SPLASH_MS` in `App.jsx` | Currently `5000` |
 | Home venue | Always `HTCC, Rayners Lane HA2 9TY` — never `HTSC` |
 | Away venue staging cast | Always `s.id::uuid` in update query — staging table imports id as text |
+| Fantasy picks — MCCL only | `recalculate_fantasy_scores_for_fixture` skips `sunday_comp` and `friendly` — only MCCL fixtures score |
+| POTM calculated for all match types | `MatchScorecardScreen` calculates POTM for every match type including CSVL — stored in `match_potm` |
+| Friendly excluded from stats | `passesFilterCompetitive` in `StatsScreen` always excludes `friendly` from POTM count and `total_points` regardless of comp filter |
+| `fantasyPoints.js` is single source of truth | Both `MatchScorecardScreen.jsx` and `StatsScreen.jsx` must mirror the same points formula — never duplicate or diverge |
+| Points formula — stacked | Batting milestones AND bowling hauls are STACKED (cumulative), not exclusive. 100r = +10+20+40 = +70. 5W = +10+15+30 = +55. |
+| `match_potm` stores winner only | One row per fixture — `player_id` is the POTM winner for that match. `points` is their raw POTM score (no multiplier). |
 
 ---
 
@@ -937,9 +1002,9 @@ python -m src.calc_awards
 >
 > **Accounts:** Expo `nishvek10`, Supabase ref `nqhhvataxjaecctvrrzc`, Apple Team `7T4DG8HHMT`, App Store App ID `6761196439`, Bundle ID `com.htcc.pavilion`, Google Play Developer ID `5496674967732676898`
 >
-> **Current version:** `1.2.1` / Build `5`
-> **iOS:** v1.2.1 Build 5 LIVE on App Store
-> **Android:** AAB submitted to Play Store (in review), APK available for sideload
+> **Current version:** `1.5.5` / iOS Build `15` / Android versionCode `15`
+> **iOS:** v1.5.5 submitted to App Store
+> **Android:** v1.5.5 submitted to Google Play
 >
 > **Critical rules:**
 > - `toLocalISO()` always, never `.toISOString().split('T')[0]`
@@ -952,19 +1017,20 @@ python -m src.calc_awards
 > - Medal/trophy icons — never apply tintColor, they have own colours
 > - `babel.config.js` — only `babel-preset-expo`, no plugins array
 > - Admin tab bar at 6-tab limit
-> - `MIN_SPLASH_MS = 3500` in `App.jsx`
+> - `MIN_SPLASH_MS = 5000` in `App.jsx`
 > - Home venue: always `HTCC, Rayners Lane HA2 9TY`
+> - Points formula is STACKED — 100r = +70, 5W = +55. `fantasyPoints.js` is source of truth.
+> - Fantasy picks only for MCCL `league` fixtures — CSVL (`sunday_comp`) and friendlies excluded
+> - `passesFilterCompetitive` in StatsScreen always excludes `friendly` from POTM + total_points
+> - `match_potm` stores one row per fixture — POTM winner only, raw points (no multiplier)
 >
-> **Immediate priorities for v1.3.0:**
-> 1. **BLACK SCREEN / FREEZE BUG** — app freezes on startup or when returning from background — HIGH PRIORITY — start here
-> 2. Remaining emoji audit and replacement
-> 3. In-app scorecard submission for admin/captain — batting, bowling, fielding → instant POTM calculation
-> 4. Team of the Week feature
-> 5. Performance — FlatList virtualisation, query optimisation, lazy loading
-> 6. Training session edit UI
-> 7. Android Play Store — confirm listing approved and live
+> **Immediate priorities for v1.6.0:**
+> 1. Team of the Week feature
+> 2. Fantasy League — transfer window, season leaderboard
+> 3. Performance — FlatList getItemLayout, query column reduction
+> 4. Admin web dashboard — pending join request approvals fix
 >
-> **Full detail in:** `pavilion-app/HANDOVER_V2.md`
+> **Full detail in:** `pavilion-app/docs/HANDOVER_V2.md`
 
 ---
 

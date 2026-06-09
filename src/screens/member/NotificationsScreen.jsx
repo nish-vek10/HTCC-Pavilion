@@ -27,6 +27,8 @@ const TYPE_COLOR = {
   join_approved:         colors.green,
   join_rejected:         colors.red,
   potm:                  colors.gold,      // gold — player of the match
+  fantasy_unlocked:      '#A78BFA',        // purple — fantasy picks open
+  fantasy_reminder:      '#A78BFA',        // purple — Friday pick reminder
   custom:                colors.textMuted,
 }
 
@@ -154,6 +156,21 @@ export default function NotificationsScreen({ navigation }) {
       // Update local state — unreadCount useMemo recalculates, then useEffect syncs badge
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))
     }
+    // Fantasy notifications → Fantasy League
+    if (
+      notif.type === 'fantasy_unlocked'     ||
+      notif.type === 'fantasy_reminder'     ||
+      notif.type === 'fantasy_pick_removed' ||
+      notif.type === 'fantasy_points_updated'
+    ) {
+      navigation.navigate(SCREENS.FANTASY_LEAGUE)
+      return
+    }
+    // Admin approval notifications → Admin Dashboard
+    if (notif.type === 'approval') {
+      navigation.navigate(SCREENS.ADMIN_DASHBOARD)
+      return
+    }
     // Navigate to fixture detail if fixture_id is present
     if (notif.fixture_id) {
       navigation.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: notif.fixture_id })
@@ -276,7 +293,7 @@ export default function NotificationsScreen({ navigation }) {
                   <TouchableOpacity
                     key={notif.id}
                     onPress={() => handleClick(notif)}
-                    activeOpacity={notif.fixture_id ? 0.7 : 1}
+                    activeOpacity={(notif.fixture_id || notif.type === 'fantasy_unlocked' || notif.type === 'fantasy_reminder' || notif.type === 'fantasy_pick_removed' || notif.type === 'fantasy_points_updated' || notif.type === 'approval') ? 0.7 : 1}
                     style={[
                       styles.notifCard,
                       { borderLeftColor: notif.read ? 'transparent' : accentColor },
@@ -304,12 +321,16 @@ export default function NotificationsScreen({ navigation }) {
                         ? renderPotmBody(notif.body, styles.notifBody)
                         : <Text style={styles.notifBody} numberOfLines={2}>{notif.body}</Text>
                       }
-                      {notif.fixture_id && (
+                      {(notif.fixture_id || notif.type === 'fantasy_unlocked' || notif.type === 'fantasy_reminder' || notif.type === 'fantasy_pick_removed' || notif.type === 'fantasy_points_updated' || notif.type === 'approval') && (
                         <Text style={[styles.notifAction, { color: accentColor }]}>
                           {notif.type === 'squad_published'
                             ? 'Tap to view fixture →'
                             : notif.type === 'potm'
                             ? 'Tap to view scorecard →'
+                            : (notif.type === 'fantasy_unlocked' || notif.type === 'fantasy_reminder' || notif.type === 'fantasy_pick_removed' || notif.type === 'fantasy_points_updated')
+                            ? 'Tap to open Fantasy League →'
+                            : notif.type === 'approval'
+                            ? 'Tap to open Admin Dashboard →'
                             : 'Tap to set availability →'}
                         </Text>
                       )}

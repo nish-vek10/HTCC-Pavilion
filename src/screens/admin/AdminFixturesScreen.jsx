@@ -102,25 +102,36 @@ export default function AdminFixturesScreen({ navigation }) {
 
     const [{ data: avail }, { data: members }] = await Promise.all([
       fixtureIds.length
-        ? supabase.from('availability').select('fixture_id, status').in('fixture_id', fixtureIds)
+        ? supabase.from('availability').select('fixture_id, player_id, status').in('fixture_id', fixtureIds)
         : Promise.resolve({ data: [] }),
       teamIds.length
-        ? supabase.from('team_members').select('team_id').in('team_id', teamIds).eq('status', 'active')
+        ? supabase.from('team_members').select('team_id, player_id').in('team_id', teamIds).eq('status', 'active')
         : Promise.resolve({ data: [] }),
     ])
 
-    // availability counts per fixture
+    // Build active player sets per team + total counts
+    const activeByTeam = {}  // { teamId: Set(player_ids) }
+    const mc = {}
+    members?.forEach(m => {
+      if (!activeByTeam[m.team_id]) activeByTeam[m.team_id] = new Set()
+      activeByTeam[m.team_id].add(m.player_id)
+      mc[m.team_id] = (mc[m.team_id] || 0) + 1
+    })
+    setMemberCounts(mc)
+
+    // Fixture → team map for active-player filtering
+    const fixTeam = {}
+    data.forEach(f => { fixTeam[f.id] = f.team_id })
+
+    // Availability counts — only count active team members (filters out ex-members)
     const ac = {}
     avail?.forEach(a => {
+      const teamId = fixTeam[a.fixture_id]
+      if (!activeByTeam[teamId]?.has(a.player_id)) return   // skip ex-members
       if (!ac[a.fixture_id]) ac[a.fixture_id] = { available: 0, tentative: 0, unavailable: 0 }
       if (ac[a.fixture_id][a.status] !== undefined) ac[a.fixture_id][a.status]++
     })
     setAvailCounts(ac)
-
-    // active member count per team
-    const mc = {}
-    members?.forEach(m => { mc[m.team_id] = (mc[m.team_id] || 0) + 1 })
-    setMemberCounts(mc)
   }
 
   const handleEdit = (fixture) => {

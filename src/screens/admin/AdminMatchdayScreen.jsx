@@ -73,6 +73,9 @@ export default function AdminMatchdayScreen({ navigation }) {
   // { [fixtureId_playerId]: true } — tracks who has been prompted
   const [prompted,    setPrompted]    = useState({})
   const [promptModal, setPromptModal] = useState({ open: false, fixtureId: null, playerId: null, playerName: '' })
+  // Availability override (long-press 3s)
+  const [availModal,  setAvailModal]  = useState({ open: false, fixtureId: null, player: null })
+  const [savingAvail, setSavingAvail] = useState(false)
 
   useFocusEffect(useCallback(() => { loadMatchday() }, [matchDate, activeTab]))
 
@@ -150,14 +153,53 @@ export default function AdminMatchdayScreen({ navigation }) {
     }
   }
 
+  // ── Availability override ────────────────────────────────────────────────
+  const AVAIL_OPTIONS = [
+    { key: 'available',   label: 'Available',   color: colors.green,     bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)'  },
+    { key: 'tentative',   label: 'Tentative',   color: '#F97316',        bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.3)' },
+    { key: 'unavailable', label: 'Unavailable', color: colors.red,       bg: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.25)' },
+    { key: null,          label: 'Not Set',     color: colors.textMuted, bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)' },
+  ]
+
+  const handleSetAvail = async (status) => {
+    const { fixtureId, player } = availModal
+    if (!fixtureId || !player) return
+    setSavingAvail(true)
+    try {
+      // RPC bypasses RLS (availability only allows player_id = auth.uid() for direct writes)
+      const { error: rpcErr } = await supabase.rpc('set_availability_as_admin', {
+        p_fixture_id: fixtureId,
+        p_player_id:  player.id,
+        p_status:     status,
+      })
+      if (rpcErr) throw new Error(rpcErr.message)
+      // Optimistic local patch — update only this player's status in playerData,
+      // no full reload so scroll position is preserved and screen doesn't jump.
+      setPlayerData(prev => {
+        const fixture = prev[fixtureId]
+        if (!fixture) return prev
+        const now = new Date().toISOString()
+        const updatedPlayers = fixture.players.map(p =>
+          p.id === player.id
+            ? { ...p, status: status, availUpdatedAt: status ? now : null, setByAdmin: status ? true : false }
+            : p
+        )
+        return { ...prev, [fixtureId]: { ...fixture, players: updatedPlayers } }
+      })
+      setAvailModal({ open: false, fixtureId: null, player: null })
+    } catch (err) { Alert.alert('Error', err.message) }
+    finally { setSavingAvail(false) }
+  }
+
   const fetchFixtureDetail = async (fixtureId, teamId, squadData, crossTeamMap = {}) => {
-    const [{ data: members }, { data: avail }] = await Promise.all([
+    const [{ data: members }, { data: avail, error: availErr }] = await Promise.all([
       supabase.from('team_members').select('player_id, profiles(id, full_name, avatar_color)').eq('team_id', teamId).eq('status', 'active'),
-      supabase.from('availability').select('player_id, status, updated_at').eq('fixture_id', fixtureId),
+      supabase.from('availability').select('player_id, status, updated_at, set_by_admin').eq('fixture_id', fixtureId),
     ])
+    if (availErr) console.warn('[AdminMatchday] avail fetch error:', availErr.message)
 
     const availMap = {}
-    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at } })
+    avail?.forEach(a => { availMap[a.player_id] = { status: a.status, updatedAt: a.updated_at, setByAdmin: a.set_by_admin || false } })
 
     // position map: player_id → position_order for THIS fixture's squad
     const positionMap = {}
@@ -175,6 +217,7 @@ export default function AdminMatchdayScreen({ navigation }) {
         color:          m.profiles?.avatar_color || colors.gold,
         status:         availEntry?.status || null,
         availUpdatedAt: availEntry?.updatedAt || null,
+        setByAdmin:     availEntry?.setByAdmin || false,
         inSquad,
         position:       positionMap[m.player_id] || 999,
         lockedByTeam,
@@ -379,8 +422,12 @@ export default function AdminMatchdayScreen({ navigation }) {
                   ) : players.length === 0 ? (
                     <Text style={styles.noPlayers}>No players assigned to this team</Text>
                   ) : players.map((player, i) => (
-                    <View key={player.id} style={[styles.playerRow, i < players.length - 1 && styles.playerRowBorder,
-                      (player.status === 'unavailable' || player.lockedByTeam) && { opacity: 0.45 }]}>
+                    <TouchableOpacity key={player.id}
+                      style={[styles.playerRow, i < players.length - 1 && styles.playerRowBorder,
+                        (player.status === 'unavailable' || player.lockedByTeam) && { opacity: 0.45 }]}
+                      onPress={() => setAvailModal({ open: true, fixtureId: fixture.id, player })}
+                      activeOpacity={0.75}
+                    >
                       {player.inSquad ? (
                         <View style={styles.squadNumBadge}>
                           <Text style={styles.squadNum}>{player.position}</Text>
@@ -402,8 +449,9 @@ export default function AdminMatchdayScreen({ navigation }) {
                           <Text style={styles.lockedTeamLabel}>{player.lockedByTeam}</Text>
                         )}
                         {formatAvailTS(player.availUpdatedAt) && (
-                          <Text style={styles.availTimestamp}>
+                          <Text style={[styles.availTimestamp, player.setByAdmin && styles.availTimestampAdmin]}>
                             Last Updated: {formatAvailTS(player.availUpdatedAt)}
+                            {player.setByAdmin ? ' (admin)' : ''}
                           </Text>
                         )}
                       </View>
@@ -427,7 +475,7 @@ export default function AdminMatchdayScreen({ navigation }) {
                       <View style={[styles.statusDot, { backgroundColor: player.status ? statusDot[player.status] : 'rgba(255,255,255,0.1)',
                         shadowColor: player.status ? statusDot[player.status] : 'transparent',
                         shadowOpacity: player.status ? 0.7 : 0, shadowRadius: 4 }]} />
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
 
@@ -451,6 +499,29 @@ export default function AdminMatchdayScreen({ navigation }) {
           })
         )}
       </ScrollView>
+
+      {/* ── Availability override modal (long-press) ── */}
+      <Modal visible={availModal.open} transparent animationType="slide"
+        onRequestClose={() => setAvailModal({ open: false, fixtureId: null, player: null })}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1}
+          onPress={() => setAvailModal({ open: false, fixtureId: null, player: null })}>
+          <View style={[styles.modalBox, { borderRadius: 24, padding: 24, paddingBottom: 40 }]}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={styles.modalTitle}>Set Availability</Text>
+            <Text style={styles.modalBody}>{availModal.player?.name}</Text>
+            {AVAIL_OPTIONS.map(opt => (
+              <TouchableOpacity key={String(opt.key)}
+                style={[styles.availOptionBtn, { backgroundColor: opt.bg, borderColor: opt.border }]}
+                onPress={() => handleSetAvail(opt.key)}
+                disabled={savingAvail} activeOpacity={0.7}>
+                <View style={[styles.availOptionDot, { backgroundColor: opt.color }]} />
+                <Text style={[styles.availOptionText, { color: opt.color }]}>{opt.label}</Text>
+                {savingAvail && <ActivityIndicator size="small" color={opt.color} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── Re-prompt confirmation modal ── */}
       <Modal
@@ -564,13 +635,19 @@ const styles = StyleSheet.create({
   lockedBadge:       { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.08)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   lockedIcon:        { fontSize: 13, color: colors.red },
   lockedTeamLabel:   { fontFamily: fonts.bold, fontSize: 9, color: colors.red, letterSpacing: 0.5, marginTop: 1 },
-  availTimestamp:    { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
+  availTimestamp:      { fontFamily: fonts.body, fontSize: 9, color: colors.textMuted, marginTop: 2, opacity: 0.75 },
+  availTimestampAdmin: { color: '#F5C518', opacity: 1 },  // yellow when set by admin
   playerNameSquad:   { fontFamily: fonts.bold, color: colors.white },
   squadStar:         { fontFamily: fonts.bold, fontSize: 11, color: colors.gold, marginRight: 4 },
   statusDot:         { width: 8, height: 8, borderRadius: 4, flexShrink: 0, elevation: 2 },
 
   squadBtn:          { backgroundColor: colors.gold, margin: spacing.sm, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
   squadBtnText:      { fontFamily: fonts.bold, fontSize: 13, color: colors.navy },
+
+  // ── Availability override modal ─────────────────────────────────────────
+  availOptionBtn:    { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.md, padding: 14, marginBottom: 8 },
+  availOptionDot:    { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  availOptionText:   { fontFamily: fonts.bold, fontSize: 14, flex: 1 },
 
   // ── Prompt button ───────────────────────────────────────────────────────
   promptBtn:         { backgroundColor: 'rgba(96,165,250,0.12)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.35)', borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 4 },

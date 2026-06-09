@@ -453,12 +453,12 @@ Every update requires a version increment in `app.json`:
 ```json
 {
   "expo": {
-    "version": "1.3.0",
+    "version": "1.5.5",
     "ios": {
-      "buildNumber": "4"
+      "buildNumber": "15"
     },
     "android": {
-      "versionCode": 4
+      "versionCode": 15
     }
   }
 }
@@ -546,4 +546,4 @@ C:\Users\ravil\PycharmProjects\HTCC-Pavilion\pavilion-app
 
 ---
 
-*Last updated: March 2026 — Pavilion v1.2.0*
+*Last updated: May 2026 — Pavilion v1.5.5 — iOS Build 15 / Android versionCode 15*

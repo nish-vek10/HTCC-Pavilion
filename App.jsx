@@ -11,10 +11,12 @@ import { supabase }            from './src/lib/supabase'
 import useAuthStore            from './src/store/authStore'
 import RootNavigator           from './src/navigation/RootNavigator'
 import SplashScreen            from './src/components/SplashV2_Fusion'
+import ForceUpdateScreen       from './src/components/ForceUpdateScreen'
 import ErrorBoundary           from './src/components/ErrorBoundary'
 import { registerPushToken, setupAndroidChannel } from './src/lib/pushNotifications'
 import * as Notifications      from 'expo-notifications'
 import * as Linking            from 'expo-linking'
+import * as Application        from 'expo-application'
 import { SCREENS }             from './src/lib/constants'
 
 // ─── CONFIGURABLE ──────────────────────────────────────────────────────────────
@@ -47,6 +49,9 @@ export default function App() {
   // ─── Navigation ref — used for imperative navigation from push handlers ────
   const navigationRef = useRef(null)
 
+  // ─── Force update gate ────────────────────────────────────────────────────
+  const [updateRequired, setUpdateRequired] = useState(false)
+
   // ─── Track minimum splash display time ───────────────────────────────────
   const [splashDone, setSplashDone] = useState(false)
 
@@ -68,6 +73,36 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => setSplashDone(true), MIN_SPLASH_MS)
     return () => clearTimeout(timer)
+  }, [])
+
+  // ─── Force update check — compare app version against Supabase min_required_version ──
+  // Runs once on mount. If current version < min_required_version, blocks the entire app.
+  // To enforce a new minimum: update app_config set value = '1.x.x' where key = 'min_required_version'
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        const { data } = await supabase
+          .from('app_config')
+          .select('value')
+          .eq('key', 'min_required_version')
+          .single()
+        if (!data?.value) return
+        const current  = Application.nativeApplicationVersion || '0.0.0'
+        const required = data.value
+        // Compare semver segments: [major, minor, patch]
+        const toNum = (v) => v.split('.').map(Number)
+        const [cM, cm, cp] = toNum(current)
+        const [rM, rm, rp] = toNum(required)
+        const outdated =
+          cM < rM ||
+          (cM === rM && cm < rm) ||
+          (cM === rM && cm === rm && cp < rp)
+        if (outdated) setUpdateRequired(true)
+      } catch (_) {
+        // Network failure — fail open, never block on connectivity issues
+      }
+    }
+    checkVersion()
   }, [])
 
   // ─── AppState — freeze prevention on background/foreground transition ─────
@@ -196,6 +231,21 @@ export default function App() {
       navigationRef.current.navigate(SCREENS.FIXTURES, { openSessionId: data.session_id })
       return
     }
+    // Fantasy notifications → Fantasy League
+    if (
+      data.type === 'fantasy_unlocked'     ||
+      data.type === 'fantasy_reminder'     ||
+      data.type === 'fantasy_pick_removed' ||
+      data.type === 'fantasy_points_updated'
+    ) {
+      navigationRef.current.navigate(SCREENS.FANTASY_LEAGUE)
+      return
+    }
+    // Admin approval notifications → Admin Dashboard
+    if (data.type === 'approval') {
+      navigationRef.current.navigate(SCREENS.ADMIN_DASHBOARD)
+      return
+    }
     // Fixture-linked notifications → go straight to fixture detail
     if (data.fixture_id) {
       navigationRef.current.navigate(SCREENS.FIXTURE_DETAIL, { fixtureId: data.fixture_id })
@@ -236,6 +286,9 @@ export default function App() {
   // After this gate, loading=false is guaranteed (getSession resolves in ~50ms)
   // RootNavigator handles any remaining transitional states via AppLoader
   if (!fontsLoaded || !splashDone) return <SplashScreen />
+
+  // ─── Force update gate — blocks entire app if version is outdated ─────────
+  if (updateRequired) return <ForceUpdateScreen />
 
   return (
     <ErrorBoundary>

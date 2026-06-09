@@ -16,6 +16,12 @@ import useAuthStore          from '../../store/authStore'
 import AppIcon               from '../../components/AppIcon'
 import { colors, fonts, spacing, radius } from '../../theme'
 import { sendPushToUsers, insertNotifications } from '../../lib/pushNotifications'
+import {
+  parseMatchIdFromUrl,
+  fetchMatchDetail,
+  identifyHtccTeamId,
+  parseHtccScorecard,
+} from '../../lib/playCricketApi'
 
 // ─── CONFIGURABLE: POTM points system ─────────────────────────────────────────
 // Adjust these values to rebalance scoring. All calculations use these constants.
@@ -35,7 +41,8 @@ const POTM = {
   WICKET:         25,   // per wicket taken
   MAIDEN:          5,   // per maiden over
   THREE_WKT:      10,   // 3+ wickets bonus
-  FIVE_WKT:       25,   // 5+ wickets bonus (stacks on THREE_WKT)
+  FOUR_WKT:       15,   // 4+ wickets bonus (stacks on THREE_WKT)
+  FIVE_WKT:       30,   // 5+ wickets bonus (stacks on FOUR_WKT + THREE_WKT)
   WIDE_PEN:       -1,   // per wide (penalty)
   NB_PEN:         -2,   // per no-ball (penalty)
   // Economy rate penalties — flat total, applied only if overs > 0
@@ -191,6 +198,10 @@ export default function MatchScorecardScreen({ route, navigation }) {
   const [bowling,  setBowling]  = useState({})     // { [player_id]: { overs, maidens, runs, wickets, no_balls, wides } }
   const [fielding, setFielding] = useState({})     // { [player_id]: { catches, stumpings } }
 
+  // ── Play Cricket pull ────────────────────────────────────────────────────────
+  const [pcMemberMap, setPcMemberMap] = useState(new Map())   // Map<pc_member_id (str) → profile_uuid>
+  const [pulling,     setPulling]     = useState(false)
+
   // ── Submission ───────────────────────────────────────────────────────────────
   const [submitting,   setSubmitting]   = useState(false)
   const [savingDraft,  setSavingDraft]  = useState(false)
@@ -241,6 +252,18 @@ export default function MatchScorecardScreen({ route, navigation }) {
         is_wk:          m.is_wicketkeeper,
       }))
       setSquad(formatted)
+
+      // Build pc_member_id → profile_uuid map for Play Cricket pull
+      const playerIds = formatted.map(m => m.player_id)
+      const { data: pcProfiles } = await supabase
+        .from('profiles')
+        .select('id, pc_member_id')
+        .in('id', playerIds)
+      const pcMap = new Map()
+      pcProfiles?.forEach(p => {
+        if (p.pc_member_id) pcMap.set(String(p.pc_member_id), p.id)
+      })
+      setPcMemberMap(pcMap)
 
       // Pre-fill any existing scorecard data (re-submission case)
       await prefillExisting(fixtureId, formatted)
@@ -332,6 +355,107 @@ export default function MatchScorecardScreen({ route, navigation }) {
     }))
   }, [])
 
+  // ── Pull scorecard from Play Cricket ─────────────────────────────────────────
+  // Resolves match_id from URL field or fixture.playcricket_id.
+  // Fetches PC match_detail, identifies HTCC innings, maps pc_member_id → profile_uuid,
+  // then merges batting/bowling/fielding into form state.
+  // Existing manually-entered values are REPLACED (PC data is source of truth).
+  const handlePullScorecard = useCallback(async () => {
+    const matchId = parseMatchIdFromUrl(playcricketUrl) ?? fixture?.playcricket_id
+    if (!matchId) {
+      Alert.alert(
+        'No Match ID',
+        'Paste a Play Cricket scorecard URL above, or ensure this fixture has a Play Cricket ID linked.',
+      )
+      return
+    }
+
+    if (pcMemberMap.size === 0) {
+      Alert.alert(
+        'No Player Links',
+        'No squad members have a Play Cricket ID linked yet. Go to Admin → Members and set Play Cricket IDs first.',
+      )
+      return
+    }
+
+    setPulling(true)
+    try {
+      const detail      = await fetchMatchDetail(matchId)
+      const htccTeamId  = identifyHtccTeamId(detail)
+      if (!htccTeamId) {
+        throw new Error(
+          'Could not find Harrow Town in this match. Check the URL is for an HTCC fixture.',
+        )
+      }
+
+      const { batting: batData, bowling: bowlData, fielding: fieldData, matched, unmatched } =
+        parseHtccScorecard(detail, htccTeamId, pcMemberMap)
+
+      // Convert numeric values to strings (TextInput compatibility) and merge into state
+      if (Object.keys(batData).length > 0) {
+        setBatting(prev => {
+          const next = { ...prev }
+          Object.entries(batData).forEach(([pid, v]) => {
+            next[pid] = {
+              runs:    String(v.runs),
+              balls:   String(v.balls),
+              fours:   String(v.fours),
+              sixes:   String(v.sixes),
+              not_out: v.not_out,
+              run_out: v.run_out,
+            }
+          })
+          return next
+        })
+      }
+
+      if (Object.keys(bowlData).length > 0) {
+        setBowling(prev => {
+          const next = { ...prev }
+          Object.entries(bowlData).forEach(([pid, v]) => {
+            next[pid] = {
+              overs:    String(v.overs),
+              maidens:  String(v.maidens),
+              runs:     String(v.runs),
+              wickets:  String(v.wickets),
+              no_balls: String(v.no_balls),
+              wides:    String(v.wides),
+            }
+          })
+          return next
+        })
+      }
+
+      if (Object.keys(fieldData).length > 0) {
+        setFielding(prev => {
+          const next = { ...prev }
+          Object.entries(fieldData).forEach(([pid, v]) => {
+            next[pid] = {
+              catches:   String(v.catches),
+              stumpings: String(v.stumpings),
+            }
+          })
+          return next
+        })
+      }
+
+      // Build result message
+      let msg = `${matched} player(s) pulled successfully.`
+      if (unmatched.length > 0) {
+        const names = unmatched.slice(0, 4).join(', ')
+        const extra = unmatched.length > 4 ? ` +${unmatched.length - 4} more` : ''
+        msg += `\n\n${unmatched.length} player(s) not linked — no Play Cricket ID set:\n${names}${extra}`
+      }
+      Alert.alert('Scorecard Pulled', msg)
+
+    } catch (err) {
+      console.error('[PC Pull]', err.message)
+      Alert.alert('Pull Failed', err.message)
+    } finally {
+      setPulling(false)
+    }
+  }, [playcricketUrl, fixture, pcMemberMap])
+
   // ── POTM calculation ─────────────────────────────────────────────────────────
   const calculatePOTM = useCallback(() => {
     let topPlayer = null
@@ -350,9 +474,9 @@ export default function MatchScorecardScreen({ route, navigation }) {
       pts += fours * POTM.FOUR_BONUS
       pts += sixes * POTM.SIX_BONUS
       if (bat.not_out && runs >= POTM.NOT_OUT_MIN) pts += POTM.NOT_OUT
-      if (runs >= 100) pts += POTM.MILESTONE_100 + POTM.MILESTONE_50 + POTM.MILESTONE_25
-      else if (runs >= 50) pts += POTM.MILESTONE_50 + POTM.MILESTONE_25
-      else if (runs >= 25) pts += POTM.MILESTONE_25
+      if      (runs >= 100) pts += POTM.MILESTONE_100 + POTM.MILESTONE_50 + POTM.MILESTONE_25
+      else if (runs >= 50)  pts += POTM.MILESTONE_50  + POTM.MILESTONE_25
+      else if (runs >= 25)  pts += POTM.MILESTONE_25
       // Duck penalty — dismissed for 0
       if (runs === 0 && !bat.not_out && (int(bat.balls) > 0 || bat.run_out)) pts += POTM.DUCK_PEN
       // Run out penalty — additional deduction if dismissed by run out
@@ -378,7 +502,8 @@ export default function MatchScorecardScreen({ route, navigation }) {
         else if (eco >= 7)  pts += POTM.ECO_PEN_7
       }
 
-      if (wickets >= 5) pts += POTM.FIVE_WKT + POTM.THREE_WKT
+      if      (wickets >= 5) pts += POTM.FIVE_WKT + POTM.FOUR_WKT + POTM.THREE_WKT
+      else if (wickets >= 4) pts += POTM.FOUR_WKT  + POTM.THREE_WKT
       else if (wickets >= 3) pts += POTM.THREE_WKT
 
       // Fielding
@@ -459,6 +584,83 @@ export default function MatchScorecardScreen({ route, navigation }) {
       setSavingDraft(false)
     }
   }
+
+  // ── Matchday complete notification ───────────────────────────────────────────
+  // Called after fantasy recalc. Checks if ALL league fixtures on the same date
+  // now have results. If so, finds the matchday top team and notifies all members.
+  const checkAndNotifyMatchdayComplete = useCallback(async (fxId) => {
+    try {
+      // Get this fixture's date and matchday
+      const { data: fx } = await supabase
+        .from('fixtures')
+        .select('match_date, match_type')
+        .eq('id', fxId)
+        .single()
+      if (!fx || fx.match_type === 'sunday_comp' || fx.match_type === 'friendly') return
+
+      const matchDate = fx.match_date
+
+      // Count all league fixtures on same date
+      const { data: sameDayFx } = await supabase
+        .from('fixtures')
+        .select('id')
+        .eq('match_date', matchDate)
+        .eq('match_type', 'league')
+      if (!sameDayFx || sameDayFx.length === 0) return
+
+      const allIds = sameDayFx.map(f => f.id)
+
+      // Count how many have results submitted
+      const { data: results } = await supabase
+        .from('match_results')
+        .select('fixture_id')
+        .in('fixture_id', allIds)
+      if (!results || results.length < allIds.length) return // not all done yet
+
+      // All submitted — find matchday number from any pick on these fixtures
+      const { data: pickRow } = await supabase
+        .from('fantasy_picks')
+        .select('matchday')
+        .in('fixture_id', allIds)
+        .limit(1)
+        .single()
+      if (!pickRow) return
+
+      const matchday = pickRow.matchday
+
+      // Find top fantasy team for this matchday
+      const { data: topScore } = await supabase
+        .from('fantasy_scores')
+        .select('total_points, fantasy_teams!team_id(name)')
+        .eq('matchday', matchday)
+        .order('total_points', { ascending: false })
+        .limit(1)
+        .single()
+
+      const topTeamName = topScore?.fantasy_teams?.name || null
+      const topPts      = topScore ? Math.round(topScore.total_points) : null
+
+      const title = `Matchday ${matchday} Points Updated!`
+      const body  = topTeamName
+        ? `${topTeamName} leads with ${topPts} pts. Check your fantasy points now.`
+        : `All results are in — check your fantasy points now.`
+
+      // Fetch all active member IDs
+      const { data: members } = await supabase
+        .from('profiles')
+        .select('id')
+        .neq('role', 'pending')
+      if (!members || members.length === 0) return
+
+      const memberIds = members.map(m => m.id)
+      sendPushToUsers(memberIds, title, body, { type: 'fantasy_points_updated', matchday })
+      insertNotifications(memberIds, 'fantasy_points_updated', title, body, { matchday })
+
+      console.log(`[Scorecard] Matchday ${matchday} complete — notified ${memberIds.length} members`)
+    } catch (err) {
+      console.warn('[Scorecard] checkAndNotifyMatchdayComplete error:', err.message)
+    }
+  }, [fixture])
 
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -545,9 +747,26 @@ export default function MatchScorecardScreen({ route, navigation }) {
         sendPushToUsers(squadPlayerIds, potmTitle, potmBody, { type: 'potm', fixture_id: fixtureId })
         insertNotifications(squadPlayerIds, 'potm', potmTitle, potmBody, { fixture_id: fixtureId })
 
+        // 7. Recalculate fantasy scores — skip for CSVL (sunday_comp) fixtures,
+        //    which are not part of the fantasy league.
+        if (fixture?.match_type !== 'sunday_comp') {
+          const { error: recalcErr } = await supabase.rpc('recalculate_fantasy_scores_for_fixture', { p_fixture_id: fixtureId })
+          if (recalcErr) console.warn('[Scorecard] fantasy recalc warn:', recalcErr.message)
+          // 8. Check if all matchday fixtures done → notify all members
+          await checkAndNotifyMatchdayComplete(fixtureId)
+        }
+
         setPotmData({ ...potmPlayer, points: potmPoints })
         setShowPOTM(true)
       } else {
+        // Still recalculate fantasy scores even without a POTM winner
+        // Skip for CSVL (sunday_comp) — not part of the fantasy league.
+        if (fixture?.match_type !== 'sunday_comp') {
+          const { error: recalcErr } = await supabase.rpc('recalculate_fantasy_scores_for_fixture', { p_fixture_id: fixtureId })
+          if (recalcErr) console.warn('[Scorecard] fantasy recalc warn:', recalcErr.message)
+          // Check if all matchday fixtures done → notify all members
+          await checkAndNotifyMatchdayComplete(fixtureId)
+        }
         Alert.alert('Submitted', 'Scorecard saved successfully.')
         navigation.goBack()
       }
@@ -652,6 +871,22 @@ export default function MatchScorecardScreen({ route, navigation }) {
           keyboardType="url"
           returnKeyType="done"
         />
+
+        {/* ── Pull scorecard from Play Cricket ── */}
+        <TouchableOpacity
+          style={[s.pullBtn, pulling && s.pullBtnDisabled]}
+          onPress={handlePullScorecard}
+          disabled={pulling}
+          activeOpacity={0.8}
+        >
+          {pulling
+            ? <ActivityIndicator color={colors.navy} size="small" />
+            : <Text style={s.pullBtnText}>PULL SCORECARD FROM PLAY CRICKET</Text>
+          }
+        </TouchableOpacity>
+        <Text style={s.pullHint}>
+          Fills batting, bowling and fielding from Play Cricket — check each tab before submitting.
+        </Text>
       </View>
     )
   }
@@ -1037,6 +1272,34 @@ const s = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 13,
     color: colors.white,
+  },
+
+  // ── Play Cricket pull button ──
+  pullBtn: {
+    marginTop: 12,
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  pullBtnDisabled: {
+    opacity: 0.55,
+  },
+  pullBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    color: colors.navy,
+  },
+  pullHint: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 6,
+    marginBottom: 4,
+    lineHeight: 16,
   },
 
   // ── Result cards ──

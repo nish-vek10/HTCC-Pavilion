@@ -4,12 +4,13 @@
 // Tabs: Batting | Bowling | Fielding | Awards
 // Tap player row → full stats modal
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
+  View, Text, ScrollView, TouchableOpacity, TextInput, Pressable,
   StyleSheet, FlatList, Modal, Animated, ActivityIndicator, Image,
 } from 'react-native'
 import { SafeAreaView }  from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
 import { supabase }      from '../../lib/supabase'
 import TopHeader         from '../../components/layout/TopHeader'
 import AppIcon           from '../../components/AppIcon'
@@ -74,6 +75,14 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
       (teamFilter === 'Sunday XI' && tName.toLowerCase().includes('sunday'))
     const compOk = !compFilter || mType === compFilter
     return teamOk && compOk
+  }
+
+  // POTM awards and total points never include friendly fixtures.
+  // Applies regardless of what compFilter is set to — even if user selects
+  // "Friendly" filter, POTM count and points from those games are always excluded.
+  const passesFilterCompetitive = (row) => {
+    if ((row.fixtures?.match_type || '') === 'friendly') return false
+    return passesFilter(row)
   }
 
   const map = {}
@@ -194,7 +203,7 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
   })
 
   // ── POTM ────────────────────────────────────────────────────────────────────
-  potmData.filter(passesFilter).forEach(row => {
+  potmData.filter(passesFilterCompetitive).forEach(row => {
     const pid = row.player_id
     if (!map[pid]) return  // skip POTM for players with no batting row (edge case)
     const p = map[pid]
@@ -208,14 +217,14 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
   // Build fixture-keyed lookups for bowl + field so we can cross-join with batting.
   const bowlByKey  = {}
   const fieldByKey = {}
-  bowlData.filter(passesFilter).forEach(r => {
+  bowlData.filter(passesFilterCompetitive).forEach(r => {
     bowlByKey[`${r.fixture_id}:${r.player_id}`] = r
   })
-  fieldData.filter(passesFilter).forEach(r => {
+  fieldData.filter(passesFilterCompetitive).forEach(r => {
     fieldByKey[`${r.fixture_id}:${r.player_id}`] = r
   })
   // Accumulate per player across every batting row (covers all played matches)
-  batData.filter(passesFilter).forEach(row => {
+  batData.filter(passesFilterCompetitive).forEach(row => {
     const pid = row.player_id
     if (!map[pid]) return
     const key   = `${row.fixture_id}:${pid}`
@@ -225,7 +234,7 @@ function aggregateStats(batData, bowlData, fieldData, potmData, teamFilter, comp
     map[pid].total_points = (map[pid].total_points || 0) + pts
   })
   // Also credit bowling-only contributions (players who bowled but weren't in batting)
-  bowlData.filter(passesFilter).forEach(row => {
+  bowlData.filter(passesFilterCompetitive).forEach(row => {
     const pid = row.player_id
     if (!map[pid]) return
     const key   = `${row.fixture_id}:${pid}`
@@ -361,14 +370,13 @@ const PlayerModal = React.memo(function PlayerModal({ player, visible, onClose }
               </>
             )}
 
-            {/* Awards */}
-            {player.potm_count > 0 && (
+            {/* Awards — always show if player has any match data */}
+            {((player.bat_innings > 0) || (player.bowl_balls > 0)) && (
               <>
                 <Text style={modal.sectionTitle}>AWARDS</Text>
                 <View style={modal.statsGrid}>
-                  {/* Both POTM and Total Pts get the gold highlight */}
-                  <StatBox label="POTM"       value={fmt(player.potm_count, 0)}  highlight />
-                  <StatBox label="Total Pts"  value={fmt(player.total_points, 0)} highlight />
+                  <StatBox label="POTM"       value={fmt(player.potm_count || 0, 0)}  highlight />
+                  <StatBox label="Total Pts"  value={fmt(player.total_points || 0, 0)} highlight />
                 </View>
               </>
             )}
@@ -414,12 +422,16 @@ const MiniStat = React.memo(function MiniStat({ label, value, primary }) {
 export default function StatsScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current
 
-  const [category,   setCategory]   = useState('batting')
-  const [teamFilter, setTeamFilter] = useState(null)
-  const [compFilter, setCompFilter] = useState(null)
-  const [search,     setSearch]     = useState('')
-  const [showMore,   setShowMore]   = useState(false)
-  const [modalState, setModalState] = useState({ visible: false, player: null })
+  const [category,        setCategory]        = useState('batting')
+  const [teamFilter,      setTeamFilter]      = useState(null)
+  const [compFilter,      setCompFilter]      = useState(null)
+  const [search,          setSearch]          = useState('')
+  const [showMore,        setShowMore]        = useState(false)
+  const [modalState,      setModalState]      = useState({ visible: false, player: null })
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
+
+  const activeFilterCount = [teamFilter !== null, compFilter !== null].filter(Boolean).length
+  const hasFilters = teamFilter !== null || compFilter !== null
 
   // Raw data from Supabase — fetched once, filtered client-side
   const [batRaw,   setBatRaw]   = useState([])
@@ -429,7 +441,7 @@ export default function StatsScreen() {
   const [loading, setLoading] = useState(true)
 
   // ── Fetch all raw data once on mount ────────────────────────────────────────
-  useEffect(() => { fetchAll() }, [])
+  useFocusEffect(useCallback(() => { fetchAll() }, []))
 
   const fetchAll = async () => {
     setLoading(true)
@@ -653,57 +665,104 @@ export default function StatsScreen() {
           <Text style={styles.pageTitle}>STATS</Text>
         </View>
 
-        {/* ── Team filter pills ── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-          {TEAM_FILTERS.map(tf => {
-            const active = teamFilter === tf.value
-            return (
-              <TouchableOpacity key={tf.label}
-                style={[styles.filterPill, active && styles.filterPillActive]}
-                onPress={() => setTeamFilter(tf.value)} activeOpacity={0.75}>
-                <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
-                  {tf.label}
-                </Text>
+        {/* ── Search bar + Filter button ── */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchWrap}>
+            <AppIcon name="search" size={14} tint={colors.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search player…"
+              placeholderTextColor={colors.textMuted}
+              value={search}
+              onChangeText={setSearch}
+              clearButtonMode="while-editing"
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => setSearch('')} style={styles.searchClear}>
+                <Text style={styles.searchClearText}>✕</Text>
               </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-
-        {/* ── Competition filter pills ── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-          {COMP_FILTERS.map(cf => {
-            const active = compFilter === cf.value
-            return (
-              <TouchableOpacity key={cf.label}
-                style={[styles.filterPill, styles.filterPillComp, active && styles.filterPillCompActive]}
-                onPress={() => setCompFilter(cf.value)} activeOpacity={0.75}>
-                <Text style={[styles.filterPillText, active && styles.filterPillCompTextActive]}>
-                  {cf.label}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-
-        {/* ── Search ── */}
-        <View style={styles.searchWrap}>
-          <AppIcon name="search" size={14} tint={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search player…"
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            clearButtonMode="while-editing"
-          />
-          {!!search && (
-            <TouchableOpacity onPress={() => setSearch('')} style={styles.searchClear}>
-              <Text style={styles.searchClearText}>✕</Text>
-            </TouchableOpacity>
-          )}
+            )}
+          </View>
+          <TouchableOpacity
+            onPress={() => setFilterModalOpen(true)}
+            activeOpacity={0.8}
+            style={[styles.filtersBtn, activeFilterCount > 0 && styles.filtersBtnActive]}
+          >
+            <AppIcon name="filter" size={13} tint={activeFilterCount > 0 ? colors.gold : colors.textMuted} />
+            <Text style={[styles.filtersBtnText, activeFilterCount > 0 && styles.filtersBtnTextActive]}>
+              {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filters'}
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* ── Filter Modal ── */}
+        <Modal
+          visible={filterModalOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setFilterModalOpen(false)}
+        >
+          <Pressable style={styles.fModalBackdrop} onPress={() => setFilterModalOpen(false)}>
+            <Pressable style={styles.fModalSheet} onPress={() => {}}>
+              <View style={styles.fModalHandle} />
+              <View style={styles.fModalHeader}>
+                <Text style={styles.fModalTitle}>FILTERS</Text>
+                {hasFilters && (
+                  <TouchableOpacity
+                    onPress={() => { setTeamFilter(null); setCompFilter(null) }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.fModalClear}>Clear all</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.fModalColumns}>
+                {/* Team column */}
+                <View style={styles.fModalColumn}>
+                  <Text style={styles.fModalColTitle}>TEAM</Text>
+                  {TEAM_FILTERS.map(tf => (
+                    <TouchableOpacity
+                      key={tf.label}
+                      onPress={() => setTeamFilter(tf.value)}
+                      style={[styles.fModalOption, teamFilter === tf.value && styles.fModalOptionActive]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.fModalOptionText, teamFilter === tf.value && styles.fModalOptionTextActive]}>
+                        {tf.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Competition column */}
+                <View style={styles.fModalColumn}>
+                  <Text style={styles.fModalColTitle}>COMPETITION</Text>
+                  {COMP_FILTERS.map(cf => (
+                    <TouchableOpacity
+                      key={cf.label}
+                      onPress={() => setCompFilter(cf.value)}
+                      style={[styles.fModalOption, compFilter === cf.value && styles.fModalOptionActive]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.fModalOptionText, compFilter === cf.value && styles.fModalOptionTextActive]}>
+                        {cf.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setFilterModalOpen(false)}
+                style={styles.fModalApply}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.fModalApplyText}>Apply Filters</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* ── Category tabs ── */}
         <View style={styles.catTabs}>
@@ -791,22 +850,33 @@ const styles = StyleSheet.create({
   sectionLabel: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 2, color: colors.gold },
   pageTitle:    { fontFamily: fonts.display, fontSize: 36, letterSpacing: 3, color: colors.white, lineHeight: 42 },
 
-  // ── Filters ──
-  filterScroll:  { flexGrow: 0, flexShrink: 0, marginBottom: 6 },
-  filterContent: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingRight: spacing.md },
-  filterPill:    { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.03)' },
-  filterPillActive: { backgroundColor: 'rgba(245,197,24,0.1)', borderColor: 'rgba(245,197,24,0.4)' },
-  filterPillComp: { paddingVertical: 5, paddingHorizontal: 12 },
-  filterPillCompActive: { backgroundColor: 'rgba(96,165,250,0.1)', borderColor: 'rgba(96,165,250,0.4)' },
-  filterPillText: { fontFamily: fonts.bold, fontSize: 11, color: colors.textMuted, letterSpacing: 0.5 },
-  filterPillTextActive:     { color: colors.gold },
-  filterPillCompTextActive: { color: '#60A5FA' },
-
-  // ── Search ──
-  searchWrap:     { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 8, marginBottom: spacing.sm },
+  // ── Search + Filter row ──
+  searchRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
+  searchWrap:     { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
   searchInput:    { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.white, padding: 0 },
   searchClear:    { padding: 2 },
   searchClearText:{ fontFamily: fonts.bold, fontSize: 12, color: colors.textMuted },
+  filtersBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 9 },
+  filtersBtnActive:     { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: 'rgba(245,197,24,0.4)' },
+  filtersBtnText:       { fontFamily: fonts.bold, fontSize: 12, color: colors.textMuted },
+  filtersBtnTextActive: { color: colors.gold },
+
+  // ── Filter modal ──
+  fModalBackdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  fModalSheet:       { backgroundColor: '#162236', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, paddingBottom: 40 },
+  fModalHandle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginTop: 12, marginBottom: 18 },
+  fModalHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  fModalTitle:       { fontFamily: fonts.display, fontSize: 20, letterSpacing: 1, color: colors.white },
+  fModalClear:       { fontFamily: fonts.bold, fontSize: 12, color: colors.textMuted },
+  fModalColumns:     { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  fModalColumn:      { flex: 1, gap: 6 },
+  fModalColTitle:    { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1.5, color: colors.textMuted, marginBottom: 4 },
+  fModalOption:      { paddingVertical: 9, paddingHorizontal: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.03)' },
+  fModalOptionActive:{ backgroundColor: 'rgba(245,197,24,0.1)', borderColor: 'rgba(245,197,24,0.4)' },
+  fModalOptionText:  { fontFamily: fonts.bold, fontSize: 12, color: colors.textMuted, letterSpacing: 0.3 },
+  fModalOptionTextActive: { color: colors.gold },
+  fModalApply:       { backgroundColor: colors.gold, borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
+  fModalApplyText:   { fontFamily: fonts.bold, fontSize: 14, color: colors.navy },
 
   // ── Category tabs — icon LEFT of text so row is compact ──
   catTabs:      { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 4 },

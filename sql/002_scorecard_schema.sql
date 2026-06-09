@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS match_batting (
   fours        int  NOT NULL DEFAULT 0,
   sixes        int  NOT NULL DEFAULT 0,
   not_out      bool NOT NULL DEFAULT false,
+  run_out      bool NOT NULL DEFAULT false,
   UNIQUE(fixture_id, player_id)
 );
 
@@ -76,24 +77,24 @@ CREATE POLICY "read_match_potm"     ON match_potm     FOR SELECT TO authenticate
 
 -- Write: admin or superadmin only
 CREATE POLICY "write_match_results"  ON match_results  FOR ALL TO authenticated
-  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'))
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'));
+  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'))
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'));
 
 CREATE POLICY "write_match_batting"  ON match_batting  FOR ALL TO authenticated
-  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'))
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'));
+  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'))
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'));
 
 CREATE POLICY "write_match_bowling"  ON match_bowling  FOR ALL TO authenticated
-  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'))
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'));
+  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'))
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'));
 
 CREATE POLICY "write_match_fielding" ON match_fielding FOR ALL TO authenticated
-  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'))
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'));
+  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'))
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'));
 
 CREATE POLICY "write_match_potm"     ON match_potm     FOR ALL TO authenticated
-  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'))
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin','captain'));
+  USING   ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'))
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','superadmin'));
 
 -- ─── Clear 2025 PlayCricket data — 2026 season starts fresh ──────────────────
 -- Run these separately once you are ready to wipe 2025 stats:

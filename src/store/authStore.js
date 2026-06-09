@@ -65,12 +65,12 @@ const useAuthStore = create((set, get) => ({
     if (error) throw error
 
     // ── Notify all admins that a new member is awaiting approval ─────────────
+    // Uses SECURITY DEFINER RPC — pending users cannot query admin push tokens via RLS
     try {
-      const { sendPushToRole, insertNotificationsForRole } = await import('../lib/pushNotifications')
+      const { notifyAdmins } = await import('../lib/pushNotifications')
       const notifTitle = 'New Member Application'
       const notifBody  = `${fullName.trim()} has registered and is awaiting approval.`
-      sendPushToRole('admin', notifTitle, notifBody, { type: 'approval' })
-      insertNotificationsForRole('admin', 'approval', notifTitle, notifBody)
+      notifyAdmins(notifTitle, notifBody, 'approval')
     } catch (err) {
       console.warn('[Auth] Admin notify error:', err.message)
     }

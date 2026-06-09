@@ -22,7 +22,8 @@ export const POTM = {
   WICKET:        25,
   MAIDEN:         5,
   THREE_WKT:     10,
-  FIVE_WKT:      25,
+  FOUR_WKT:      15,
+  FIVE_WKT:      30,
   WIDE_PEN:      -1,
   NB_PEN:        -2,
   ECO_PEN_7:     -2,
@@ -82,7 +83,8 @@ export function calcPlayerPoints(bat, bowl, field) {
       else if (eco >= 8)  bowling += POTM.ECO_PEN_8
       else if (eco >= 7)  bowling += POTM.ECO_PEN_7
     }
-    if      (wickets >= 5) bowling += POTM.FIVE_WKT + POTM.THREE_WKT
+    if      (wickets >= 5) bowling += POTM.FIVE_WKT + POTM.FOUR_WKT + POTM.THREE_WKT
+    else if (wickets >= 4) bowling += POTM.FOUR_WKT  + POTM.THREE_WKT
     else if (wickets >= 3) bowling += POTM.THREE_WKT
   }
 

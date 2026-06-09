@@ -106,6 +106,12 @@ export const NOTIF_TYPE_ICON = {
   join_approved:         'approve',
   join_rejected:         'reject',
   potm:                  'trophy',
+  fantasy_unlocked:      'trophy',
+  fantasy_reminder:      'trophy',
+  training_reminder:     'training',
+  role_change:           'approve',
+  team_added:            'approve',
+  announcement:          'send',
   custom:                'send',
 }
 
@@ -138,10 +144,12 @@ export const SCREENS = {
   TRAINING_DETAIL:  'TrainingDetail',
 
   // Captain
-  CAPTAIN_FIXTURES: 'CaptainFixtures',
-  SQUAD_SELECTION:  'SquadSelection',
-  FIXTURE_DETAIL:   'FixtureDetail',
-  STATS:            'Stats',
+  CAPTAIN_FIXTURES:  'CaptainFixtures',
+  CAPTAIN_MATCHDAY:  'CaptainMatchday',
+  CAPTAIN_TRAINING:  'CaptainTraining',
+  SQUAD_SELECTION:   'SquadSelection',
+  FIXTURE_DETAIL:    'FixtureDetail',
+  STATS:             'Stats',
 
   // Fantasy
   FANTASY_LEAGUE:   'FantasyLeague',

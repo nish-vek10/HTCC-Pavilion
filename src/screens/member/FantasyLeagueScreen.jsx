@@ -20,7 +20,7 @@ import { calcPlayerPoints, applyMultiplier }     from '../../lib/fantasyPoints'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const TEAM_TAB_ORDER = ['1st XI', '2nd XI', '3rd XI', '4th XI']
-const CUTOFF_HOUR    = 11
+const CUTOFF_HOUR    = 9
 
 function getInitials(name = '') {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'
@@ -71,7 +71,8 @@ const FANTASY_POINTS_REF = [
     { action: 'Per wicket',         pts: '+25' },
     { action: 'Per maiden',         pts: '+5'  },
     { action: '3+ wickets bonus',   pts: '+10' },
-    { action: '5+ wickets bonus',   pts: '+25' },
+    { action: '4+ wickets bonus',   pts: '+15' },
+    { action: '5+ wickets bonus',   pts: '+30' },
     { action: 'Per wide',           pts: '−1'  },
     { action: 'Per no-ball',        pts: '−2'  },
     { action: 'Economy 7–8',        pts: '−2'  },
@@ -205,7 +206,7 @@ function PlayerStrip({ pick, breakdown, showPoints }) {
 }
 
 // ─── PickTeamModal ────────────────────────────────────────────────────────────
-function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availablePlayers, existingPicks, onSave, saving }) {
+function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availablePlayers, existingPicks, onSave, saving, prevPickedIds, myProfileId }) {
   const tabKeys = TEAM_TAB_ORDER.filter(k => availablePlayers[k])
 
   const [activeTab,  setActiveTab]  = useState(0)
@@ -223,7 +224,11 @@ function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availableP
   const togglePlayer = (player, teamName) => {
     const existing = picks.find(p => p.player_id === player.id)
     if (existing) { setRoleTarget({ ...player, team_name: teamName }); return }
+    // Blocked — picked in the previous matchday (self exempt: can back yourself every week)
+    if (prevPickedIds?.has(player.id) && player.id !== myProfileId) return
     if (picks.length >= 11) { Alert.alert('Squad Full', 'Remove a player before adding another.'); return }
+    const teamCount = picks.filter(p => p.team_name === teamName).length
+    if (teamCount >= 3) { Alert.alert('Team Limit', `Max 3 players from ${teamName}. Remove one first.`); return }
     setPicks(prev => [...prev, {
       player_id: player.id, fixture_id: player.fixtureId,
       player_name: player.name, team_name: teamName,
@@ -264,7 +269,7 @@ function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availableP
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={s.pickTitle}>MATCHDAY {matchdayNum} SELECTION</Text>
-            {matchdayDate && <Text style={s.pickSubtitle}>{format(parseISO(matchdayDate), 'EEE d MMM yyyy')} · Cutoff 11:00 AM</Text>}
+            {matchdayDate && <Text style={s.pickSubtitle}>{format(parseISO(matchdayDate), 'EEE d MMM yyyy')} · Cutoff 9:00 AM</Text>}
           </View>
           <View style={[s.pickCounter, count === 11 && s.pickCounterFull]}>
             <Text style={[s.pickCounterText, count === 11 && { color: colors.navy }]}>{count}/11</Text>
@@ -291,6 +296,7 @@ function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availableP
             const col = teamTabColor(key)
             const isActive = idx === activeTab
             const teamPickCount = picks.filter(p => p.team_name === key).length
+            const atMax = teamPickCount >= 3
             return (
               <TouchableOpacity
                 key={key}
@@ -300,8 +306,8 @@ function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availableP
               >
                 <Text style={[s.pickTabText, isActive && { color: col }]}>{teamShort(key)}</Text>
                 {teamPickCount > 0 && (
-                  <View style={[s.pickTabBadge, { backgroundColor: col }]}>
-                    <Text style={s.pickTabBadgeNum}>{teamPickCount}</Text>
+                  <View style={[s.pickTabBadge, { backgroundColor: atMax ? '#F97316' : col }]}>
+                    <Text style={s.pickTabBadgeNum}>{teamPickCount}/3</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -312,26 +318,38 @@ function PickTeamModal({ visible, onClose, matchdayNum, matchdayDate, availableP
         {/* Player list */}
         <ScrollView style={s.pickList} showsVerticalScrollIndicator={false}>
           {(availablePlayers[tabKeys[activeTab]] || []).map(player => {
-            const pick       = picks.find(p => p.player_id === player.id)
-            const isSelected = !!pick
-            const isCap      = pick?.is_captain || false
-            const isVc       = pick?.is_vc       || false
+            const pick        = picks.find(p => p.player_id === player.id)
+            const isSelected  = !!pick
+            const isCap       = pick?.is_captain || false
+            const isVc        = pick?.is_vc       || false
+            // Blocked if picked in the previous matchday (self exempt — can back yourself every week)
+            const isBlocked   = !isSelected && (prevPickedIds?.has(player.id) || false) && player.id !== myProfileId
             return (
               <TouchableOpacity
                 key={player.id}
-                style={[s.pickRow, isSelected && { borderColor: tabColor + '55', backgroundColor: tabColor + '08' }]}
-                onPress={() => togglePlayer(player, tabKeys[activeTab])}
-                activeOpacity={0.7}
+                style={[
+                  s.pickRow,
+                  isSelected && { borderColor: tabColor + '55', backgroundColor: tabColor + '08' },
+                  isBlocked  && s.pickRowBlocked,
+                ]}
+                onPress={() => !isBlocked && togglePlayer(player, tabKeys[activeTab])}
+                activeOpacity={isBlocked ? 1 : 0.7}
               >
-                <View style={[s.pickCheck, isSelected && { backgroundColor: tabColor, borderColor: tabColor }]}>
+                <View style={[s.pickCheck, isSelected && { backgroundColor: tabColor, borderColor: tabColor }, isBlocked && s.pickCheckBlocked]}>
                   {isSelected && <Text style={s.pickCheckMark}>✓</Text>}
+                  {isBlocked  && <Text style={s.pickCheckBlockedMark}>✕</Text>}
                 </View>
-                <View style={[s.pickAvatar, { backgroundColor: player.color + '22', borderColor: player.color + '44' }]}>
-                  <Text style={[s.pickAvatarText, { color: player.color }]}>{getInitials(player.name)}</Text>
+                <View style={[s.pickAvatar, { backgroundColor: player.color + (isBlocked ? '11' : '22'), borderColor: player.color + (isBlocked ? '22' : '44') }]}>
+                  <Text style={[s.pickAvatarText, { color: player.color, opacity: isBlocked ? 0.4 : 1 }]}>{getInitials(player.name)}</Text>
                 </View>
-                <Text style={[s.pickPlayerName, isSelected && { color: colors.white, fontFamily: fonts.bold }]} numberOfLines={1}>
-                  {player.name}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.pickPlayerName, isSelected && { color: colors.white, fontFamily: fonts.bold }, isBlocked && { color: colors.textMuted }]} numberOfLines={1}>
+                    {player.name}
+                  </Text>
+                  {isBlocked && (
+                    <Text style={s.pickBlockedLabel}>In your last week's XI · not eligible</Text>
+                  )}
+                </View>
                 {isSelected && (
                   <View style={[s.pickRoleBadge, isCap && s.pickRoleBadgeC, isVc && s.pickRoleBadgeVC, !isCap && !isVc && s.pickRoleBadgeNone]}>
                     <Text style={[s.pickRoleBadgeText, isCap && { color: colors.gold }, isVc && { color: '#60A5FA' }, !isCap && !isVc && { color: colors.textMuted }]}>
@@ -402,53 +420,92 @@ const MEDAL_COLS  = {
   3: { border: '#CD7F32', bg: 'rgba(205,127,50,0.06)',  text: '#CD7F32' },
 }
 
-// ─── LbTopCard — gold / silver / bronze podium card ──────────────────────────
-function LbTopCard({ entry, rank, onPress, half }) {
-  const col    = MEDAL_COLS[rank]
+// ─── LbTopCard — full-width animated podium card ─────────────────────────────
+function LbTopCard({ entry, rank, onPress, animValue }) {
+  const col     = MEDAL_COLS[rank]
   const isFirst = rank === 1
+
+  const opacity    = animValue
+  const translateY = animValue.interpolate({ inputRange: [0, 1], outputRange: [24, 0] })
+
+  // Gold card shimmer sweep — rank 1 only
+  const goldSweep = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (!isFirst) return
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(goldSweep, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: true }),
+        Animated.delay(1200),
+      ])
+    ).start()
+  }, [isFirst])
+  const sweepX = goldSweep.interpolate({ inputRange: [0, 1], outputRange: [-320, 420] })
+
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={[
-        s.lbTopCard,
-        { borderColor: col.border, backgroundColor: col.bg },
-        isFirst && s.lbTopCard1,
-        half    && s.lbTopCardHalf,
-        entry.is_me && { borderWidth: 2 },
-      ]}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        {/* Left: medal icon + name stack */}
-        <AppIcon name={MEDAL_ICONS[rank]} size={isFirst ? 20 : 16} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text
-              style={[s.lbTopTeamName, { color: isFirst ? colors.white : col.text, fontSize: isFirst ? 16 : 13 }]}
-              numberOfLines={1}
-            >
+    <Animated.View style={{ opacity, transform: [{ translateY }], marginBottom: 8 }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.8}
+        style={[
+          s.lbTopCard,
+          { borderColor: col.border, backgroundColor: col.bg },
+          isFirst && s.lbTopCard1,
+          entry.is_me && { borderColor: col.border, borderWidth: 2 },
+        ]}
+      >
+        {/* Gold shimmer sweep — background layer, rank 1 only */}
+        {isFirst && (
+          <Animated.View
+            pointerEvents="none"
+            style={[s.lbGoldSweep, { transform: [{ translateX: sweepX }, { skewX: '-18deg' }] }]}
+          />
+        )}
+
+        {/* Left: medal circle only — no rank text, medal icon shows number */}
+        <View style={s.lbTopLeft}>
+          <View style={[s.lbTopMedalCircle,
+            { width: isFirst ? 42 : 34, height: isFirst ? 42 : 34, borderRadius: isFirst ? 21 : 17,
+              backgroundColor: col.border + '20', borderColor: col.border + '50' }]}>
+            <AppIcon name={MEDAL_ICONS[rank]} size={isFirst ? 22 : 16} />
+          </View>
+        </View>
+
+        {/* Center: team name + member name */}
+        <View style={s.lbTopCenter}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            <Text style={[s.lbTopTeamName, { color: isFirst ? colors.white : col.text, fontSize: isFirst ? 15 : 13 }]}>
               {entry.team_name}
             </Text>
             {entry.is_me && (
               <View style={s.lbMeBadge}><Text style={s.lbMeBadgeText}>YOU</Text></View>
             )}
           </View>
-          <Text style={s.lbTopMember} numberOfLines={1}>{entry.member_name}</Text>
+          <Text style={s.lbTopMember}>{entry.member_name}</Text>
         </View>
-        {/* Right: big points */}
-        <Text style={[s.lbTopPts, { color: col.text, fontSize: isFirst ? 26 : 20 }]}>
-          {Math.round(entry.total_points)}<Text style={{ fontSize: isFirst ? 10 : 9, fontFamily: fonts.bold }}> pts</Text>
-        </Text>
-      </View>
-    </TouchableOpacity>
+
+        {/* Right: points */}
+        <View style={s.lbTopPtsBlock}>
+          <Text style={[s.lbTopPts, { color: col.text, fontSize: isFirst ? 26 : 18 }]}>
+            {Math.round(entry.total_points)}
+          </Text>
+          <Text style={[s.lbTopPtsSuffix, { color: col.text }]}>pts</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   )
 }
 
-// ─── PlayerDetailModal — matchday archive: scores + picks per matchday ────────
-function PlayerDetailModal({ visible, onClose, team, data, picks, loading }) {
+// ─── PlayerDetailModal ─────────────────────────────────────────────────────────
+// isMe=true  → matchday cards that expand to show own XI + per-player points
+// isMe=false → matchday cards only (picks private, never exposed to others)
+function PlayerDetailModal({ visible, onClose, team, data, loading, matchdays, isMe, picks, pickPoints }) {
   const [expandedMd, setExpandedMd] = useState(null)
+
   if (!team) return null
   const total = data.reduce((acc, r) => acc + Number(r.total_points), 0)
+
+  const dateByMd = {}
+  matchdays?.forEach(m => { dateByMd[m.matchday_num] = m.date })
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -482,47 +539,64 @@ function PlayerDetailModal({ visible, onClose, team, data, picks, loading }) {
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
               {data.map(row => {
-                const mdPicks  = picks[row.matchday] || []
-                const isOpen   = expandedMd === row.matchday
-                const captain  = mdPicks.find(p => p.is_captain)
-                const vc       = mdPicks.find(p => p.is_vc)
+                const dateStr   = dateByMd[row.matchday]
+                const dateLabel = dateStr ? format(parseISO(dateStr), 'EEE d MMM yyyy') : null
+                const pts       = Math.round(Number(row.total_points))
+                const mdPicks   = isMe ? (picks[row.matchday] || []) : []
+                const isOpen    = isMe && expandedMd === row.matchday
+
                 return (
-                  <View key={row.matchday} style={s.detailMdBlock}>
-                    {/* Score row — tap to expand picks */}
+                  <View key={row.matchday}>
+                    {/* ── Score card — tappable if own team and picks exist ── */}
                     <TouchableOpacity
-                      style={s.detailRow}
-                      onPress={() => setExpandedMd(isOpen ? null : row.matchday)}
-                      activeOpacity={0.7}
+                      style={s.detailMdCard}
+                      activeOpacity={isMe && mdPicks.length > 0 ? 0.7 : 1}
+                      onPress={() => {
+                        if (isMe && mdPicks.length > 0) setExpandedMd(isOpen ? null : row.matchday)
+                      }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={s.detailMdLabel}>MATCHDAY {row.matchday}</Text>
-                        {mdPicks.length > 0 && (
-                          <Text style={s.detailMdHint}>{isOpen ? 'Hide XI ▲' : 'View XI ▼'}</Text>
+                        <Text style={s.detailMdCardTitle}>MATCHDAY {row.matchday}</Text>
+                        {dateLabel && <Text style={s.detailMdCardDate}>{dateLabel}</Text>}
+                        {isMe && mdPicks.length > 0 && (
+                          <Text style={s.detailMdCardHint}>{isOpen ? 'Hide XI ▲' : 'View XI ▼'}</Text>
                         )}
                       </View>
-                      <Text style={s.detailMdPts}>
-                        {Number(row.total_points) >= 0 ? '+' : ''}{Math.round(Number(row.total_points))} pts
+                      <Text style={[s.detailMdCardPts, pts < 0 && { color: colors.red }]}>
+                        {pts >= 0 ? '+' : ''}{pts} pts
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Expanded XI */}
+                    {/* ── Expanded XI — own picks + individual points ── */}
                     {isOpen && mdPicks.length > 0 && (
                       <View style={s.detailPicksWrap}>
-                        {mdPicks.map((p, idx) => (
-                          <View key={idx} style={s.detailPickRow}>
-                            <View style={[s.detailPickAvatar, { backgroundColor: p.color + '22', borderColor: p.color + '44' }]}>
-                              <Text style={[s.detailPickInitials, { color: p.color }]}>
-                                {p.player_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                              </Text>
+                        {mdPicks.map((p, idx) => {
+                          const rawPts   = pickPoints[row.matchday]?.[p.player_id]?.total || 0
+                          const finalPts = Math.round(applyMultiplier(rawPts, p.is_captain, p.is_vc))
+                          return (
+                            <View key={idx} style={s.detailPickRow}>
+                              {/* Avatar */}
+                              <View style={[s.detailPickAvatar, { backgroundColor: p.color + '22', borderColor: p.color + '44' }]}>
+                                <Text style={[s.detailPickInitials, { color: p.color }]}>
+                                  {p.player_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                </Text>
+                              </View>
+                              {/* Name + team */}
+                              <View style={{ flex: 1 }}>
+                                <Text style={s.detailPickName} numberOfLines={1}>{p.player_name}</Text>
+                                <Text style={s.detailPickTeam}>{teamShort(p.team_name)}</Text>
+                              </View>
+                              {/* C/VC badge + points */}
+                              <View style={s.detailPickRight}>
+                                {p.is_captain && <View style={s.detailBadgeC}><Text style={s.detailBadgeCText}>C</Text></View>}
+                                {p.is_vc      && <View style={s.detailBadgeVC}><Text style={s.detailBadgeVCText}>VC</Text></View>}
+                                <Text style={[s.detailPickPts, finalPts < 0 && { color: colors.red }]}>
+                                  {finalPts >= 0 ? '+' : ''}{finalPts}
+                                </Text>
+                              </View>
                             </View>
-                            <Text style={s.detailPickName} numberOfLines={1}>{p.player_name}</Text>
-                            <View style={s.detailPickRight}>
-                              <Text style={s.detailPickTeam}>{teamShort(p.team_name)}</Text>
-                              {p.is_captain && <View style={s.detailBadgeC}><Text style={s.detailBadgeCText}>C</Text></View>}
-                              {p.is_vc      && <View style={s.detailBadgeVC}><Text style={s.detailBadgeVCText}>VC</Text></View>}
-                            </View>
-                          </View>
-                        ))}
+                          )
+                        })}
                       </View>
                     )}
                   </View>
@@ -549,6 +623,7 @@ export default function FantasyLeagueScreen() {
   const [currentMatchday,  setCurrentMatchday]   = useState(null)
   const [availablePlayers, setAvailablePlayers]  = useState({})
   const [myPicks,          setMyPicks]           = useState([])
+  const [prevPickedIds,    setPrevPickedIds]     = useState(new Set())  // player_ids picked in previous matchday
   const [playerPoints,     setPlayerPoints]      = useState({})
   const [scorecardIn,      setScorecardIn]       = useState(false)
   const [leaderboard,      setLeaderboard]       = useState([])
@@ -571,10 +646,10 @@ export default function FantasyLeagueScreen() {
   const [teamsBaseCache,   setTeamsBaseCache]    = useState([])     // [{ team_id, team_name, member_name, is_me }]
 
   // Player detail drill-down
-  const [detailTeam,       setDetailTeam]        = useState(null)
-  const [detailData,       setDetailData]        = useState([])     // [{ matchday, total_points }]
-  const [detailPicks,      setDetailPicks]       = useState({})     // { [matchday]: [pick,...] }
-  const [detailExpandedMd, setDetailExpandedMd] = useState(null)   // expanded matchday num
+  const [detailTeam,       setDetailTeam]       = useState(null)
+  const [detailData,       setDetailData]        = useState([])   // [{ matchday, total_points }]
+  const [detailPicks,      setDetailPicks]       = useState({})   // { [matchday]: [pick,...] } — own team only
+  const [detailPickPoints, setDetailPickPoints]  = useState({})   // { [matchday]: { [playerId]: { total } } } — own team only
   const [showDetail,       setShowDetail]        = useState(false)
   const [detailLoading,    setDetailLoading]     = useState(false)
 
@@ -583,6 +658,21 @@ export default function FantasyLeagueScreen() {
     Animated.loop(Animated.timing(shimmer, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true })).start()
   }, [])
   const shimmerX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-120, 120] })
+
+  // Podium entrance animation — staggered slide-up per card (reset on tab/data change)
+  const podiumAnims = useRef([
+    new Animated.Value(0), new Animated.Value(0), new Animated.Value(0),
+  ]).current
+  const triggerPodium = useCallback(() => {
+    podiumAnims.forEach(a => a.setValue(0))
+    Animated.stagger(100, podiumAnims.map(a =>
+      Animated.timing(a, { toValue: 1, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true })
+    )).start()
+  }, [])
+  useEffect(() => {
+    if (leaderboard.length > 0 || mdLeaderboard.length > 0) triggerPodium()
+  }, [leaderboard, mdLeaderboard])
+  useEffect(() => { triggerPodium() }, [lbTab])
 
   useFocusEffect(useCallback(() => { if (profile?.id) loadAll(profile.id) }, [profile?.id]))
 
@@ -648,6 +738,19 @@ export default function FantasyLeagueScreen() {
         setAvailablePlayers(available)
       }
 
+      // ── Previous matchday picks — blocked for current week (no repeat picks) ──
+      if (team && current.matchday_num > 1) {
+        const { data: prevPicks } = await supabase
+          .from('fantasy_picks')
+          .select('player_id')
+          .eq('team_id', team.id)
+          .eq('matchday', current.matchday_num - 1)
+        const prevSet = new Set((prevPicks || []).map(p => p.player_id))
+        setPrevPickedIds(prevSet)
+      } else {
+        setPrevPickedIds(new Set())
+      }
+
       // Picks + points if team exists
       if (team) {
         const { data: picksData } = await supabase
@@ -683,13 +786,18 @@ export default function FantasyLeagueScreen() {
 
       // Store all matchdays for archive navigation
       setAllMatchdays(matchdays.map(m => ({ matchday_num: m.matchday_num, date: m.date })))
-      setSelectedMdNum(current?.matchday_num || null)
 
       const lbData = await fetchLeaderboard(team?.id, current?.matchday_num || 0)
       setLeaderboard(lbData.overallLB)
       setMdLeaderboard(lbData.matchdayLB)
       setAllMdScores(lbData.byMd)
       setTeamsBaseCache(lbData.teamsBase)
+
+      // Default matchday selector → last matchday that has any scores.
+      // If no scores exist yet, fall back to current matchday_num.
+      const scoredMdNums = Object.keys(lbData.byMd).map(Number).filter(n => n > 0)
+      const lastScored   = scoredMdNums.length > 0 ? Math.max(...scoredMdNums) : (current?.matchday_num || null)
+      setSelectedMdNum(lastScored)
     } catch (err) {
       console.error('[Fantasy] loadAll error:', err)
     } finally {
@@ -788,7 +896,7 @@ export default function FantasyLeagueScreen() {
     // Hard cutoff check — re-evaluated at submit time, not just at render
     if (isCutoffPassed(currentMatchday?.date)) {
       setShowPickModal(false)
-      Alert.alert('Picks Locked', 'The 11:00 AM cutoff for this matchday has passed. No changes allowed.')
+      Alert.alert('Picks Locked', 'The 9:00 AM cutoff for this matchday has passed. No changes allowed.')
       return
     }
     setSaving(true)
@@ -818,36 +926,76 @@ export default function FantasyLeagueScreen() {
     setMdLeaderboard(newLB)
   }, [selectedMdNum, allMdScores, teamsBaseCache])
 
-  // ── Team drill-down — scores + archived picks per matchday ───────────────────
+  // ── Team drill-down ───────────────────────────────────────────────────────────
+  // isMe=true  → fetch own picks + per-player points (RLS allows this)
+  // isMe=false → fetch scores only (picks are private — RLS blocks other teams' picks)
   const handleTeamPress = async (entry) => {
     setDetailTeam(entry)
     setDetailData([])
     setDetailPicks({})
-    setDetailExpandedMd(null)
+    setDetailPickPoints({})
     setDetailLoading(true)
     setShowDetail(true)
-    const [{ data: scores }, { data: picks }] = await Promise.all([
-      supabase.from('fantasy_scores').select('matchday, total_points').eq('team_id', entry.team_id).order('matchday', { ascending: true }),
-      supabase.from('fantasy_picks')
-        .select('matchday, player_id, is_captain, is_vc, profiles(full_name, avatar_color), fixtures(teams(name))')
-        .eq('team_id', entry.team_id)
-        .order('matchday', { ascending: true }),
-    ])
+
+    // Always fetch scores (publicly readable)
+    const { data: scores } = await supabase
+      .from('fantasy_scores')
+      .select('matchday, total_points')
+      .eq('team_id', entry.team_id)
+      .order('matchday', { ascending: true })
     setDetailData(scores || [])
-    // Group picks by matchday
-    const grouped = {}
-    ;(picks || []).forEach(p => {
-      const md = p.matchday
-      if (!grouped[md]) grouped[md] = []
-      grouped[md].push({
-        player_name: toTitleCase(p.profiles?.full_name) || 'Unknown',
-        team_name:   p.fixtures?.teams?.name || '',
-        is_captain:  p.is_captain,
-        is_vc:       p.is_vc,
-        color:       p.profiles?.avatar_color || colors.gold,
-      })
-    })
-    setDetailPicks(grouped)
+
+    // Own team only — fetch picks + calculate per-player points
+    if (entry.is_me) {
+      const { data: rawPicks } = await supabase
+        .from('fantasy_picks')
+        .select('matchday, fixture_id, player_id, is_captain, is_vc, profiles(full_name, avatar_color), fixtures(teams(name))')
+        .eq('team_id', entry.team_id)
+        .order('matchday', { ascending: true })
+
+      if (rawPicks?.length) {
+        // Group picks by matchday
+        const grouped = {}
+        const fixturePlayerMap = {} // { fixtureId: [playerId,...] }
+        rawPicks.forEach(p => {
+          if (!grouped[p.matchday]) grouped[p.matchday] = []
+          grouped[p.matchday].push({
+            player_id:   p.player_id,
+            fixture_id:  p.fixture_id,
+            player_name: toTitleCase(p.profiles?.full_name) || 'Unknown',
+            team_name:   p.fixtures?.teams?.name || '',
+            is_captain:  p.is_captain,
+            is_vc:       p.is_vc,
+            color:       p.profiles?.avatar_color || colors.gold,
+          })
+          if (!fixturePlayerMap[p.fixture_id]) fixturePlayerMap[p.fixture_id] = []
+          fixturePlayerMap[p.fixture_id].push(p.player_id)
+        })
+        setDetailPicks(grouped)
+
+        // Fetch batting/bowling/fielding per fixture → calculate per-player points
+        const pointsByMd = {} // { [matchday]: { [playerId]: calcPlayerPoints result } }
+        await Promise.all(
+          Object.entries(fixturePlayerMap).map(async ([fid, pids]) => {
+            const [{ data: bat }, { data: bowl }, { data: field }] = await Promise.all([
+              supabase.from('match_batting').select('*').eq('fixture_id', fid).in('player_id', pids),
+              supabase.from('match_bowling').select('*').eq('fixture_id', fid).in('player_id', pids),
+              supabase.from('match_fielding').select('*').eq('fixture_id', fid).in('player_id', pids),
+            ])
+            const bm = {}; bat?.forEach(r => bm[r.player_id] = r)
+            const bw = {}; bowl?.forEach(r => bw[r.player_id] = r)
+            const fm = {}; field?.forEach(r => fm[r.player_id] = r)
+            // Find which matchday this fixture belongs to
+            rawPicks.filter(p => p.fixture_id === fid).forEach(p => {
+              if (!pointsByMd[p.matchday]) pointsByMd[p.matchday] = {}
+              pointsByMd[p.matchday][p.player_id] = calcPlayerPoints(bm[p.player_id], bw[p.player_id], fm[p.player_id])
+            })
+          })
+        )
+        setDetailPickPoints(pointsByMd)
+      }
+    }
+
     setDetailLoading(false)
   }
 
@@ -995,7 +1143,7 @@ export default function FantasyLeagueScreen() {
                   </View>
                 </View>
 
-                {mdStatus === 'open' && <Text style={s.cutoffNote}>Picks lock at 11:00 AM on {format(parseISO(currentMatchday.date), 'd MMM')}</Text>}
+                {mdStatus === 'open' && <Text style={s.cutoffNote}>Picks lock at 9:00 AM on {format(parseISO(currentMatchday.date), 'd MMM')}</Text>}
 
                 {mdStatus === 'open' && myPicks.length === 0 && (
                   <TouchableOpacity style={s.pickXIBtn} onPress={() => setShowPickModal(true)} activeOpacity={0.8}>
@@ -1020,7 +1168,18 @@ export default function FantasyLeagueScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
-                    {myPicks.map(pick => (
+                    {[...myPicks].sort((a, b) => {
+                      const teamOrder = (n = '') => {
+                        if (n.includes('1st')) return 0
+                        if (n.includes('2nd')) return 1
+                        if (n.includes('3rd')) return 2
+                        if (n.includes('4th')) return 3
+                        return 4
+                      }
+                      const tA = teamOrder(a.team_name); const tB = teamOrder(b.team_name)
+                      if (tA !== tB) return tA - tB
+                      return (a.player_name || '').localeCompare(b.player_name || '')
+                    }).map(pick => (
                       <PlayerStrip key={pick.player_id} pick={pick} breakdown={playerPoints[pick.player_id]} showPoints={scorecardIn} />
                     ))}
                     {scorecardIn && (
@@ -1120,31 +1279,16 @@ export default function FantasyLeagueScreen() {
             const rest = data.slice(3)
             return (
               <>
-                {/* Rank 1 — full-width featured card */}
-                {top3[0] && (
+                {/* Ranks 1–3 — full-width stacked podium cards */}
+                {top3.map((entry, i) => (
                   <LbTopCard
-                    entry={top3[0]} rank={1}
-                    onPress={() => handleTeamPress(top3[0])}
+                    key={entry.team_id}
+                    entry={entry}
+                    rank={i + 1}
+                    animValue={podiumAnims[i]}
+                    onPress={() => handleTeamPress(entry)}
                   />
-                )}
-
-                {/* Ranks 2 & 3 — side by side */}
-                {top3.length > 1 && (
-                  <View style={s.lbTop23Row}>
-                    {top3[1] && (
-                      <LbTopCard
-                        entry={top3[1]} rank={2}
-                        onPress={() => handleTeamPress(top3[1])} half
-                      />
-                    )}
-                    {top3[2] && (
-                      <LbTopCard
-                        entry={top3[2]} rank={3}
-                        onPress={() => handleTeamPress(top3[2])} half
-                      />
-                    )}
-                  </View>
-                )}
+                ))}
 
                 {/* Ranks 4+ */}
                 {rest.map(entry => (
@@ -1192,8 +1336,11 @@ export default function FantasyLeagueScreen() {
         onClose={() => setShowDetail(false)}
         team={detailTeam}
         data={detailData}
-        picks={detailPicks}
+        matchdays={allMatchdays}
         loading={detailLoading}
+        isMe={detailTeam?.is_me || false}
+        picks={detailPicks}
+        pickPoints={detailPickPoints}
       />
       <CreateTeamModal
         visible={showCreateModal} saving={saving} teamName={teamNameInput}
@@ -1206,6 +1353,8 @@ export default function FantasyLeagueScreen() {
           matchdayNum={currentMatchday.matchday_num} matchdayDate={currentMatchday.date}
           availablePlayers={availablePlayers} existingPicks={myPicks}
           onSave={handleSavePicks} saving={saving}
+          prevPickedIds={prevPickedIds}
+          myProfileId={profile?.id}
         />
       )}
     </View>
@@ -1330,15 +1479,20 @@ const s = StyleSheet.create({
   lbTabText:      { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.5, color: colors.textMuted },
   lbTabTextActive:{ color: colors.gold },
 
-  // Top 3 podium
-  lbTop23Row:     { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  lbTopCard:      { borderWidth: 1, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: spacing.md, marginBottom: 8 },
-  lbTopCard1:     { paddingVertical: 12, paddingHorizontal: spacing.md, borderRadius: radius.lg },
-  lbTopCardHalf:  { flex: 1, marginBottom: 0 },
-  lbTopMedalRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  lbTopTeamName:  { fontFamily: fonts.display, letterSpacing: 1, color: colors.white, flexShrink: 1 },
-  lbTopMember:    { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 1 },
-  lbTopPts:       { fontFamily: fonts.display, letterSpacing: 1, flexShrink: 0 },
+  // Top 3 podium — full-width stacked animated cards
+  // rank 2 & 3 use paddingVertical: 9 (same as rank 4+ rows) — only rank 1 is taller
+  lbTopCard:        { borderWidth: 1, borderRadius: radius.md, paddingVertical: 9, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: 12, overflow: 'hidden' },
+  lbTopCard1:       { paddingVertical: 16, borderRadius: radius.lg },
+  lbTopLeft:        { alignItems: 'center', width: 42, flexShrink: 0 },
+  lbTopMedalCircle: { borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  lbTopCenter:      { flex: 1, minWidth: 0 },
+  lbTopTeamName:    { fontFamily: fonts.display, letterSpacing: 0.8, color: colors.white },
+  lbTopMember:      { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  lbTopPtsBlock:    { alignItems: 'flex-end', flexShrink: 0 },
+  lbTopPts:         { fontFamily: fonts.display, letterSpacing: 0.5 },
+  lbTopPtsSuffix:   { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1, opacity: 0.7, marginTop: 1 },
+  // Gold sweep — absolute band that sweeps left → right across rank 1 card background
+  lbGoldSweep:      { position: 'absolute', top: 0, bottom: 0, width: 90, backgroundColor: 'rgba(245,197,24,0.14)' },
 
   // Me badge
   lbMeBadge:      { backgroundColor: 'rgba(245,197,24,0.15)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.4)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
@@ -1368,9 +1522,6 @@ const s = StyleSheet.create({
   detailMember:     { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
   detailDivider:    { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: spacing.md },
   detailEmpty:      { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.xl },
-  detailRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  detailMdLabel:    { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.5, color: colors.textMuted },
-  detailMdPts:      { fontFamily: fonts.bold, fontSize: 15, color: colors.gold },
   detailTotalRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, marginTop: 4, borderTopWidth: 1.5, borderTopColor: 'rgba(245,197,24,0.25)' },
   detailTotalLabel: { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 2, color: colors.textMuted },
   detailTotalPts:   { fontFamily: fonts.display, fontSize: 24, letterSpacing: 1, color: colors.gold },
@@ -1418,12 +1569,16 @@ const s = StyleSheet.create({
   pickTabBadge:  { position: 'absolute', top: 5, right: 8, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   pickTabBadgeNum:{ fontFamily: fonts.bold, fontSize: 9, color: colors.navy },
   pickList:      { flex: 1, paddingHorizontal: spacing.md },
-  pickRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'transparent', borderRadius: radius.sm, marginVertical: 2, paddingHorizontal: 4 },
-  pickCheck:     { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  pickCheckMark: { fontFamily: fonts.bold, fontSize: 11, color: colors.navy },
+  pickRow:            { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'transparent', borderRadius: radius.sm, marginVertical: 2, paddingHorizontal: 4 },
+  pickRowBlocked:     { opacity: 0.45 },
+  pickCheck:          { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  pickCheckMark:      { fontFamily: fonts.bold, fontSize: 11, color: colors.navy },
+  pickCheckBlocked:   { borderColor: colors.red, backgroundColor: 'rgba(239,68,68,0.08)' },
+  pickCheckBlockedMark:{ fontFamily: fonts.bold, fontSize: 9, color: colors.red },
+  pickBlockedLabel:   { fontFamily: fonts.body, fontSize: 10, color: colors.red, marginTop: 2, letterSpacing: 0.2 },
   pickAvatar:    { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   pickAvatarText:{ fontFamily: fonts.bold, fontSize: 11 },
-  pickPlayerName:{ flex: 1, fontFamily: fonts.medium, fontSize: 14, color: colors.textLight },
+  pickPlayerName:{ fontFamily: fonts.medium, fontSize: 14, color: colors.textLight },
   pickRoleBadge: { width: 30, height: 26, borderRadius: 4, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   pickRoleBadgeC:{ backgroundColor: 'rgba(245,197,24,0.15)', borderColor: 'rgba(245,197,24,0.5)' },
   pickRoleBadgeVC:{ backgroundColor: 'rgba(96,165,250,0.15)', borderColor: 'rgba(96,165,250,0.5)' },
@@ -1466,18 +1621,29 @@ const s = StyleSheet.create({
   detailSeasonTotal: { fontFamily: fonts.display, fontSize: 22, letterSpacing: 1, color: colors.gold },
   detailSeasonLabel: { fontFamily: fonts.bold, fontSize: 8, letterSpacing: 2, color: colors.textMuted, marginTop: 1 },
 
-  // Player detail modal — matchday block + expanded XI picks
-  detailMdBlock:     { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  detailMdHint:      { fontFamily: fonts.body, fontSize: 10, color: colors.gold, marginTop: 2, opacity: 0.7 },
-  detailPicksWrap:   { paddingTop: 6, paddingBottom: 10, gap: 6 },
-  detailPickRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5, paddingHorizontal: 4 },
-  detailPickAvatar:  { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  detailPickInitials:{ fontFamily: fonts.bold, fontSize: 9 },
-  detailPickName:    { flex: 1, fontFamily: fonts.medium, fontSize: 13, color: colors.textLight },
-  detailPickRight:   { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
-  detailPickTeam:    { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8, color: colors.textMuted },
-  detailBadgeC:      { backgroundColor: 'rgba(245,197,24,0.15)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.45)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 },
-  detailBadgeCText:  { fontFamily: fonts.bold, fontSize: 8, color: colors.gold },
-  detailBadgeVC:     { backgroundColor: 'rgba(96,165,250,0.15)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.45)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 },
-  detailBadgeVCText: { fontFamily: fonts.bold, fontSize: 8, color: '#60A5FA' },
+  // Matchday score cards
+  detailMdCard:      {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 6,
+  },
+  detailMdCardTitle: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.8, color: colors.green, marginBottom: 3 },
+  detailMdCardDate:  { fontFamily: fonts.body, fontSize: 12, color: colors.textLight },
+  detailMdCardHint:  { fontFamily: fonts.body, fontSize: 10, color: colors.gold, marginTop: 3, opacity: 0.75 },
+  detailMdCardPts:   { fontFamily: fonts.bold, fontSize: 18, color: colors.gold, letterSpacing: 0.5 },
+
+  // Own XI expanded picks (self-view only)
+  detailPicksWrap:    { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 8, marginBottom: 8, paddingVertical: 4, paddingHorizontal: 4 },
+  detailPickRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  detailPickAvatar:   { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  detailPickInitials: { fontFamily: fonts.bold, fontSize: 9 },
+  detailPickName:     { fontFamily: fonts.medium, fontSize: 13, color: colors.textLight },
+  detailPickTeam:     { fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8, color: colors.textMuted, marginTop: 1 },
+  detailPickRight:    { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  detailPickPts:      { fontFamily: fonts.bold, fontSize: 14, color: colors.gold, minWidth: 36, textAlign: 'right' },
+  detailBadgeC:       { backgroundColor: 'rgba(245,197,24,0.15)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.45)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 },
+  detailBadgeCText:   { fontFamily: fonts.bold, fontSize: 8, color: colors.gold },
+  detailBadgeVC:      { backgroundColor: 'rgba(96,165,250,0.15)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.45)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1 },
+  detailBadgeVCText:  { fontFamily: fonts.bold, fontSize: 8, color: '#60A5FA' },
 })
