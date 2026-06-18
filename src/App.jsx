@@ -48,18 +48,21 @@ import SplashScreen from './components/ui/SplashScreen.jsx'
 export default function App() {
   const init    = useAuthStore(state => state.init)
   const loading = useAuthStore(state => state.loading)
-  const [minTimeDone, setMinTimeDone] = useState(false)
+  // ── Skip splash for reset-password path — link opens directly to the form ──
+  const isResetPath = window.location.pathname === '/reset-password'
+  const [minTimeDone, setMinTimeDone] = useState(isResetPath)
 
   // ── Initialise auth session on app mount ──
   useEffect(() => {
     init()
   }, [init])
 
-  // ── Minimum splash duration — 3.5 seconds ──
+  // ── Minimum splash duration — skipped for reset-password deep link ──
   useEffect(() => {
+    if (isResetPath) return
     const timer = setTimeout(() => setMinTimeDone(true), 4500)
     return () => clearTimeout(timer)
-  }, [])
+  }, [isResetPath])
 
   // ── Show splash until BOTH auth resolved AND 3.5s elapsed ──
   if (loading || !minTimeDone) return <SplashScreen />
@@ -179,12 +182,3 @@ export default function App() {
           <AdminRoute><ProfilePage /></AdminRoute>
         } />
         <Route path="/captain/profile" element={
-          <CaptainRoute><ProfilePage /></CaptainRoute>
-        } />
-
-        {/* ── Catch-all ── */}
-        <Route path="*" element={<Navigate to={ROUTES.LANDING} replace />} />
-      </Routes>
-    </BrowserRouter>
-  )
-}
