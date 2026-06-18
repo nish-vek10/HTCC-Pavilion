@@ -1,0 +1,5 @@
+# pavilion-web/netlify.toml
+
+[build]
+  command = "cp assets/htcc-logo.png public/assets/images/ && cp assets/favicon.png public/assets/ && npm run build:web"
+ 
