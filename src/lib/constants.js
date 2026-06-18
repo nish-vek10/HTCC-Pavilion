@@ -1,22 +1,21 @@
-// pavilion-app/src/lib/constants.js
-// Mirrors pavilion-web/src/lib/constants.js exactly
+// pavilion-web/src/lib/constants.js
 
-// ─── App identity ─────────────────────────────────────────────────────────────
-export const APP_NAME     = 'Pavilion'
-export const CLUB_NAME    = 'Harrow Town Cricket Club'
-export const CLUB_SHORT   = 'HTCC'
+// ─── CONFIGURABLE: App identity ───────────────────
+export const APP_NAME = 'Pavilion'
+export const CLUB_NAME = 'Harrow Town Cricket Club'
+export const CLUB_SHORT = 'HTCC'
 export const CLUB_FOUNDED = 1921
 
-// ─── Roles ────────────────────────────────────────────────────────────────────
+// ─── User roles (must match Supabase enum exactly) ─
 export const ROLES = {
-  PENDING:    'pending',
-  MEMBER:     'member',
-  CAPTAIN:    'captain',
-  ADMIN:      'admin',
-  SUPERADMIN: 'superadmin',
+  PENDING:      'pending',
+  MEMBER:       'member',
+  CAPTAIN:      'captain',
+  ADMIN:        'admin',
+  SUPERADMIN:   'superadmin',
 }
 
-// ─── Role hierarchy ───────────────────────────────────────────────────────────
+// ─── Role hierarchy (higher = more access) ────────
 export const ROLE_LEVEL = {
   pending:    0,
   member:     1,
@@ -25,7 +24,7 @@ export const ROLE_LEVEL = {
   superadmin: 4,
 }
 
-// ─── Availability ─────────────────────────────────────────────────────────────
+// ─── Availability statuses ────────────────────────
 export const AVAILABILITY = {
   AVAILABLE:   'available',
   UNAVAILABLE: 'unavailable',
@@ -33,124 +32,133 @@ export const AVAILABILITY = {
   NONE:        null,
 }
 
+// ─── Availability display config ──────────────────
 export const AVAILABILITY_CONFIG = {
   available: {
     label:     'Available',
     color:     '#22C55E',
     fillColor: 'rgba(34,197,94,0.15)',
+    dotClass:  'status-dot--available',
+    pillClass: 'avail-pill--available',
   },
   unavailable: {
     label:     'Unavailable',
     color:     '#EF4444',
     fillColor: 'rgba(239,68,68,0.15)',
+    dotClass:  'status-dot--unavailable',
+    pillClass: 'avail-pill--unavailable',
   },
   tentative: {
     label:     'Tentative',
     color:     '#F5C518',
     fillColor: 'rgba(245,197,24,0.15)',
+    dotClass:  'status-dot--tentative',
+    pillClass: 'avail-pill--tentative',
   },
 }
 
-// ─── Match types — always displayed in caps ───────────────────────────────────
+// ─── Teams ────────────────────────────────────────
+export const TEAMS = {
+  FIRST:   '1st XI',
+  SECOND:  '2nd XI',
+  THIRD:   '3rd XI',
+  FOURTH:  '4th XI',
+  SUNDAY:  'Sunday XI',
+}
+
+export const DAY_TYPES = {
+  SATURDAY: 'saturday',
+  SUNDAY:   'sunday',
+}
+
+// ─── Match types ──────────────────────────────────
+export const MATCH_TYPES = {
+  LEAGUE:       'league',
+  CUP:          'cup',
+  FRIENDLY:     'friendly',
+  SUNDAY_COMP:  'sunday_comp',
+}
+
 export const MATCH_TYPE_LABELS = {
-  league:      'MCCL',
-  cup:         'CUP',
-  friendly:    'FRIENDLY',
-  sunday_comp: 'CVSL',
+  league:      '🏆 MCCL',
+  cup:         '🏅 Cup',
+  friendly:    '🤝 Friendly',
+  sunday_comp: '☀️ CVSL',
 }
 
-// ─── Team colours — canonical palette, used everywhere a team name → colour ───
-// 1st XI = Gold, 2nd XI = Blue, 3rd XI = Green, 4th XI = Purple, Sunday = Orange
-export const TEAM_COLOURS = {
-  '1st XI':   '#F5C518',   // gold
-  '2nd XI':   '#60A5FA',   // blue
-  '3rd XI':   '#22C55E',   // green
-  '4th XI':   '#A78BFA',   // purple
-  'Sunday XI':'#F97316',   // orange
-}
-
-// Normalise any casing variation → Title Case  (e.g. "MOHIT singh TanWar" → "Mohit Singh Tanwar")
-export function toTitleCase(name) {
-  if (!name) return name
-  return name.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
-}
-
-// Helper — returns the canonical colour for a team name string
-export function teamColor(name) {
-  if (!name) return '#8B9BB4'
-  if (name.includes('1st'))                  return TEAM_COLOURS['1st XI']
-  if (name.includes('2nd'))                  return TEAM_COLOURS['2nd XI']
-  if (name.includes('3rd'))                  return TEAM_COLOURS['3rd XI']
-  if (name.includes('4th'))                  return TEAM_COLOURS['4th XI']
-  if (name.toLowerCase().includes('sunday')) return TEAM_COLOURS['Sunday XI']
-  return '#8B9BB4'
-}
-
-// Short display name for a team — used in compact badges
-export function shortTeam(name) {
-  if (!name) return ''
-  if (name.toLowerCase().includes('sunday')) return 'Sun XI'
-  const m = name.match(/(\d+(?:st|nd|rd|th) XI)/i)
-  return m ? m[1] : name.split(' ')[0]
-}
-
-// ─── Squad size ───────────────────────────────────────────────────────────────
+// ─── Squad size ───────────────────────────────────
 export const SQUAD_SIZE = 11
 
-// ─── Notification type icons — icon names from icons.js, resolved in NotificationsScreen ──
-export const NOTIF_TYPE_ICON = {
-  availability_reminder: 'cricketBat',
-  squad_published:       'cricketBat',
-  approval:              'approve',
-  welcome:               'approve',
-  join_approved:         'approve',
-  join_rejected:         'reject',
-  potm:                  'trophy',
-  fantasy_unlocked:      'trophy',
-  fantasy_reminder:      'trophy',
-  training_reminder:     'training',
-  role_change:           'approve',
-  team_added:            'approve',
-  announcement:          'send',
-  custom:                'send',
+// ─── Notification types ───────────────────────────
+export const NOTIF_TYPES = {
+  AVAILABILITY_REMINDER: 'availability_reminder',
+  TRAINING_REMINDER:     'training_reminder',
+  SQUAD_PUBLISHED:       'squad_published',
+  APPROVAL:              'approval',
+  ROLE_CHANGE:           'role_change',
+  WELCOME:               'welcome',
+  JOIN_APPROVED:         'join_approved',
+  ANNOUNCEMENT:          'announcement',
+  CUSTOM:                'custom',
 }
 
-// ─── Screen name constants — used by all navigators ───────────────────────────
-export const SCREENS = {
-  // Auth
-  WELCOME:          'Welcome',
-  LOGIN:            'Login',
-  SIGNUP:           'Signup',
-  PENDING:          'Pending',
-  CHECK_EMAIL:      'CheckEmail',
-  FORGOT_PASSWORD:  'ForgotPassword',
-  RESET_PASSWORD:   'ResetPassword',
+// ─── Route paths ──────────────────────────────────
+export const ROUTES = {
+  // Public
+  LANDING:        '/',
+  LOGIN:          '/login',
+  SIGNUP:         '/signup',
+  PENDING:        '/pending',
+  CHECK_EMAIL:    '/check-email',
+  RESET_PASSWORD: '/reset-password',
 
   // Member
-  DASHBOARD:     'Dashboard',
-  FIXTURES:      'Fixtures',
-  TEAMS:         'Teams',
-  NOTIFICATIONS: 'Notifications',
-  PROFILE:       'Profile',
-
-  // Admin
-  ADMIN_DASHBOARD:     'AdminDashboard',
-  ADMIN_MATCHDAY:      'AdminMatchday',
-  ADMIN_FIXTURES:      'AdminFixtures',
-  MATCH_SCORECARD: 'MatchScorecard',
-  ADMIN_MEMBERS:       'AdminMembers',
-  ADMIN_ANNOUNCEMENTS: 'AdminAnnouncements',
-  ADMIN_TRAINING:   'AdminTraining',
-  TRAINING_DETAIL:  'TrainingDetail',
+  DASHBOARD: '/dashboard',
+  FIXTURES:  '/fixtures',
+  FIXTURE:   '/fixture/:id',
+  TEAMS:     '/teams',
+  PROFILE:   '/profile',
+  SQUAD_VIEW:'/squad/:id',
 
   // Captain
-  CAPTAIN_FIXTURES:  'CaptainFixtures',
-  CAPTAIN_MATCHDAY:  'CaptainMatchday',
-  CAPTAIN_TRAINING:  'CaptainTraining',
-  SQUAD_SELECTION:   'SquadSelection',
-  FIXTURE_DETAIL:    'FixtureDetail',
-  STATS:             'Stats',
+  CAPTAIN_FIXTURE: '/captain/fixture/:id',
+  CAPTAIN_SQUAD:   '/captain/squad/:id',
+  CAPTAIN_NEW:     '/captain/fixtures/new',
 
-  // Fantasy
-  FANTASY_LEAGUE:   'FantasyLeague',
+  // Admin
+  ADMIN_DASHBOARD:      '/admin',
+  ADMIN_MATCHDAY:       '/admin/matchday/:date',
+  ADMIN_FIXTURE:        '/admin/fixture/:id',
+  ADMIN_MEMBERS:        '/admin/members',
+  ADMIN_FIXTURES:       '/admin/fixtures',
+  ADMIN_ANNOUNCEMENTS:  '/admin/announcements',
+  ADMIN_SESSIONS:       '/admin/sessions',
+  ADMIN_TRAINING_DETAIL:'/admin/sessions/:sessionId',
+  NOTIFICATIONS:          '/notifications',
+  MATCH_CONFIRMATION:     '/fixture-confirmation/:fixtureId',
+}
+
+// ─── Browser tab titles ───────────────────────────
+export const PAGE_TITLES = {
+  MATCH_CONFIRMATION:  'Pavilion · Match Confirmation',
+  LANDING:             'Pavilion · HTCC',
+  LOGIN:               'Pavilion · Sign In',
+  SIGNUP:              'Pavilion · Join HTCC',
+  PENDING:             'Pavilion · Awaiting Approval',
+  CHECK_EMAIL:         'Pavilion · Check Your Email',
+  RESET_PASSWORD:      'Pavilion · Reset Password',
+  DASHBOARD:           'Pavilion · Home',
+  FIXTURES:            'Pavilion · Fixtures',
+  TEAMS:               'Pavilion · My Teams',
+  PROFILE:             'Pavilion · Profile',
+  CAPTAIN_AVAIL:       'Pavilion · Availability Board',
+  CAPTAIN_SQUAD:       'Pavilion · Squad Selector',
+  ADMIN_OVERVIEW:      'Pavilion · Admin Overview',
+  ADMIN_DASHBOARD:     'Pavilion · Admin Overview',  // alias used by AdminDashboardPage
+  ADMIN_MATCHDAY:      'Pavilion · Matchday — Admin',
+  ADMIN_FIXTURES:      'Pavilion · Fixtures — Admin',
+  ADMIN_MEMBERS:       'Pavilion · Members — Admin',
+  ADMIN_ANNOUNCEMENTS:  'Pavilion · Announcements — Admin',
+  ADMIN_SESSIONS:       'Pavilion · Sessions — Admin',
+  ADMIN_TRAINING_DETAIL:'Pavilion · Training Session — Admin',
 }
