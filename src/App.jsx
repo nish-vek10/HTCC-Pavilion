@@ -182,3 +182,12 @@ export default function App() {
           <AdminRoute><ProfilePage /></AdminRoute>
         } />
         <Route path="/captain/profile" element={
+          <CaptainRoute><ProfilePage /></CaptainRoute>
+        } />
+
+        {/* ── Catch-all ── */}
+        <Route path="*" element={<Navigate to={ROUTES.LANDING} replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
